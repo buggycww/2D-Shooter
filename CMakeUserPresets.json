@@ -6,7 +6,7 @@
             "displayName": "x64 Debug (User)",
             "inherits": "x64-debug",
             "cacheVariables": {
-                "CMAKE_PREFIX_PATH": "C:\\\\SDKs\\\\SDL3-3.4.18;C:\\SDKs\\SDL3_image-3.4.8"
+                "CMAKE_PREFIX_PATH": "C:\\SDKs\\SDL3-3.4.18;C:\\SDKs\\SDL3_image-3.4.8;C:\\SDKs\\glm-1.0.3-VC"
             }
         }
     ]
