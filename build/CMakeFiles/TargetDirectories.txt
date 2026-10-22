@@ -1,0 +1,3 @@
+C:/Projects/2D-Shooter/build/CMakeFiles/ALL_BUILD.dir
+C:/Projects/2D-Shooter/build/CMakeFiles/ZERO_CHECK.dir
+C:/Projects/2D-Shooter/build/2D-Shooter/CMakeFiles/2D-Shooter.dir
