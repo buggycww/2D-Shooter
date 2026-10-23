@@ -32,6 +32,8 @@ struct SDLState
 struct GameState
 {
 	std::array<std::vector<GameObject>, 2> layers;
+	std::vector<GameObject> backgroundTiles;
+	std::vector<GameObject> foregroundTiles;
 	int playerIndex;
 	SDL_FRect mapViewport;
 	float bg2Scroll, bg3Scroll, bg4Scroll;
@@ -198,12 +200,22 @@ int main(int argc, char* argv[])
 		drawParallaxBackground(state, res.bg2Tex, gs.getPlayer().velocity.x, gs.bg2Scroll, 0.3f, deltaTime);
 
 		// draw all objects
+		for (auto& tile : gs.backgroundTiles)
+		{
+			drawObject(state, gs, tile, deltaTime);
+		}
+
 		for (auto& layer : gs.layers)
 		{
 			for (auto& obj : layer)
 			{
 				drawObject(state, gs, obj, deltaTime);
 			}
+		}
+
+		for (auto& tile : gs.foregroundTiles)
+		{
+			drawObject(state, gs, tile, deltaTime);
 		}
 
 		// display debug info
@@ -503,59 +515,97 @@ void createTiles(const SDLState& state, GameState& gs, const Resources& res)
 		6 - Brick
 	*/
 
+	short background[MAP_ROWS][MAP_COLUMNS] = {
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 6, 6, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 6, 6, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 6, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	};
+
 	short map[MAP_ROWS][MAP_COLUMNS] = {
-		0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		0, 0, 2, 0, 0, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		0, 2, 2, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 0, 0, 0, 2, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 2, 0, 0, 0, 0, 0, 0, 2, 2, 2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 2, 2, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 	};
 
-	const auto createObject = [&state](int r, int c, ObjectType type, SDL_Texture* texture) {
-		GameObject o;
-		o.type = type;
-		o.texture = texture;
-		o.position = glm::vec2(c * TILE_SIZE, state.logH - ((MAP_ROWS - r) * TILE_SIZE));
-		return o;
+	short foreground[MAP_ROWS][MAP_COLUMNS] = {
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		5, 0, 0, 5, 5, 5, 5, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	};
+
+	const auto loadMap = [&](short layer[MAP_ROWS][MAP_COLUMNS])
+		{
+			const auto createObject = [&state](int r, int c, ObjectType type, SDL_Texture* texture) {
+				GameObject o;
+				o.type = type;
+				o.texture = texture;
+				o.position = glm::vec2(c * TILE_SIZE, state.logH - ((MAP_ROWS - r) * TILE_SIZE));
+				return o;
+				};
+
+			for (int r = 0; r < MAP_ROWS; r++)
+			{
+				for (int c = 0; c < MAP_COLUMNS; c++)
+				{
+					switch (layer[r][c])
+					{
+						case 1: // ground
+						{
+							GameObject ground = createObject(r, c, ObjectType::level, res.groundTex);
+							ground.data.level = LevelData();
+							gs.layers[LAYER_IDX_LEVEL].push_back(ground);
+							break;
+						}
+						case 2: // panel
+						{
+							GameObject panel = createObject(r, c, ObjectType::level, res.panelTex);
+							panel.data.level = LevelData();
+							gs.layers[LAYER_IDX_LEVEL].push_back(panel);
+							break;
+						}
+						case 4: // player
+						{
+							GameObject player = createObject(r, c, ObjectType::player, res.idleTex);
+							player.data.player = PlayerData();
+							player.animations = res.playerAnims;
+							player.currentAnimation = res.ANIM_PLAYER_IDLE;
+							player.acceleration = glm::vec2(300, 0);
+							player.maxSpeed.x = 100;
+							player.collider = { .x = 12, .y = 6, .w = 10, .h = 26 };
+							player.dynamic = true;
+							gs.layers[LAYER_IDX_CHARACTERS].push_back(player);
+							gs.playerIndex = gs.layers[LAYER_IDX_CHARACTERS].size() - 1;
+							break;
+						}
+						case 5: // grass
+						{
+							GameObject grass = createObject(r, c, ObjectType::level, res.grassTex);
+							grass.data.level = LevelData();
+							gs.foregroundTiles.push_back(grass);
+							break;
+						}
+						case 6: // brick
+						{
+							GameObject brick = createObject(r, c, ObjectType::level, res.brickTex);
+							brick.data.level = LevelData();
+							gs.backgroundTiles.push_back(brick);
+							break;
+						}
+					}
+				}
+			}
 		};
 
-	for (int r = 0; r < MAP_ROWS; r++)
-	{
-		for (int c = 0; c < MAP_COLUMNS; c++)
-		{
-			switch (map[r][c])
-			{
-			case 1: // ground
-			{
-				GameObject ground = createObject(r, c, ObjectType::level, res.groundTex);
-				ground.data.level = LevelData();
-				gs.layers[LAYER_IDX_LEVEL].push_back(ground);
-				break;
-			}
-			case 2: // panel
-			{
-				GameObject panel = createObject(r, c, ObjectType::level, res.panelTex);
-				panel.data.level = LevelData();
-				gs.layers[LAYER_IDX_LEVEL].push_back(panel);
-				break;
-			}
-			case 4: // player
-			{
-				GameObject player = createObject(r, c, ObjectType::player, res.idleTex);
-				player.data.player = PlayerData();
-				player.animations = res.playerAnims;
-				player.currentAnimation = res.ANIM_PLAYER_IDLE;
-				player.acceleration = glm::vec2(300, 0);
-				player.maxSpeed.x = 100;
-				player.collider = { .x = 12, .y = 6, .w = 10, .h = 26 };
-				player.dynamic = true;
-				gs.layers[LAYER_IDX_CHARACTERS].push_back(player);
-				gs.playerIndex = gs.layers[LAYER_IDX_CHARACTERS].size() - 1;
-				break;
-			}
-			}
-		}
-	}
+	loadMap(background);
+	loadMap(map);
+	loadMap(foreground);
+
 	assert(gs.playerIndex != -1);
 }
 
