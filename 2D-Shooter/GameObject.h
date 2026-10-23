@@ -4,6 +4,7 @@
 #include "Animation.h"
 #include <vector>
 #include <SDL3/SDL.h>
+#include "GlobalConstants.h"
 
 enum class ObjectType
 {
@@ -37,6 +38,9 @@ struct GameObject
 	ObjectData data;
 	glm::vec2 position, velocity, acceleration, maxSpeed;
 	float direction;
+	bool dynamic = false;
+	bool grounded = false;
+	SDL_FRect collider;
 
 	std::vector<Animation> animations;
 	int currentAnimation;
@@ -49,6 +53,7 @@ struct GameObject
 		direction = 1;
 		position = velocity = acceleration = glm::vec2(0);
 		maxSpeed = glm::vec2(0);
+		collider = { .x = 0, .y = 0, .w = TILE_SIZE, .h = TILE_SIZE };
 		currentAnimation = -1;
 		texture = nullptr;
 	}
