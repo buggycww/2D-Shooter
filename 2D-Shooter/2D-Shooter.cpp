@@ -422,7 +422,8 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
 						};
 
 						SDL_FRect rectC{ 0 };
-						if (SDL_GetRectIntersectionFloat(&sensor, &rectB, &rectC))
+						if (SDL_GetRectIntersectionFloat(&sensor, &rectB, &rectC)
+							&& rectC.w > 0.0f && rectC.h > 0.0f)
 						{
 							foundGround = true;
 						}
