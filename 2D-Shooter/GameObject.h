@@ -8,7 +8,7 @@
 
 enum class ObjectType
 {
-	player, level, enemy
+	player, level, enemy, bullet
 };
 
 enum class PlayerState
@@ -16,20 +16,34 @@ enum class PlayerState
 	idle, running, jumping
 };
 
+enum class BulletState
+{
+	moving, colliding, inactive
+};
+
 struct PlayerData
 {
 	PlayerState state;
-	PlayerData() : state(PlayerState::idle) {}
+	bool isShooting = false;
+	Timer shootTimer;
+	PlayerData() : state(PlayerState::idle), shootTimer(0.2) {}
 };
 
 struct EnemyData {};
 struct LevelData {};
+
+struct BulletData
+{
+	BulletState state;
+	BulletData() : state(BulletState::moving) {}
+};
 
 union ObjectData
 {
 	LevelData level;
 	PlayerData player;
 	EnemyData enemy;
+	BulletData bullet;
 };
 
 struct GameObject
@@ -39,10 +53,12 @@ struct GameObject
 	glm::vec2 position, velocity, acceleration, maxSpeed;
 	float direction;
 	bool dynamic = false;
+	bool gravityEnabled = false;
 	bool grounded = false;
 	SDL_FRect collider;
 
 	std::vector<Animation> animations;
+	int textureSize;
 	int currentAnimation;
 
 	SDL_Texture* texture;
@@ -55,6 +71,7 @@ struct GameObject
 		maxSpeed = glm::vec2(0);
 		collider = { .x = 0, .y = 0, .w = TILE_SIZE, .h = TILE_SIZE };
 		currentAnimation = -1;
+		textureSize = TILE_SIZE;
 		texture = nullptr;
 	}
 };

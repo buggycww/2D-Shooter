@@ -2,8 +2,15 @@
 
 // player
 inline constexpr const char* idleTexFilePath = "data/idle.png";
+inline constexpr const char* shootTexFilePath = "data/shoot.png";
 inline constexpr const char* runTexFilePath = "data/run.png";
+inline constexpr const char* shootRunTexFilePath = "data/shoot_run.png";
 inline constexpr const char* slideTexFilePath = "data/slide.png";
+inline constexpr const char* shootSlideTexFilePath = "data/slide_shoot.png";
+
+// bullet
+inline constexpr const char* bulletTexFilePath = "data/bullet.png";
+inline constexpr const char* bulletHitTexFilePath = "data/bullet_hit.png";
 
 // backround
 inline constexpr const char* bg1FilePath = "data/bg/bg_layer1.png";
