@@ -506,7 +506,7 @@ void collisionResponse(const Resources& res, GameObject& objA, GameObject& objB,
 			case BulletState::moving:
 			{
 				genericResponse();
-				objA.velocity *= 0;
+				objA.velocity *= 0; 
 				objA.data.bullet.state = BulletState::colliding;
 				objA.currentAnimation = res.ANIM_BULLET_HIT;
 				objA.texture = res.bulletHitTex;
