@@ -19,9 +19,9 @@ public:
 		}
 	}
 
-	const bool isTimeout() { return timeout; }
-	const float getTime() { return time; }
-	const float getLength() { return length; }
+	bool isTimeout() const { return timeout; }
+	float getTime() const { return time; }
+	float getLength() const { return length; }
 	
 	void reset()
 	{

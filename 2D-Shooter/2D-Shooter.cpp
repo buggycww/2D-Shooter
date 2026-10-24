@@ -23,7 +23,7 @@ bool initialiseSDL(SDLState& state);
 void drawObject(const SDLState& state, const GameState& gs, GameObject& obj, float deltaTime);
 void update(const SDLState& state, GameState& gs, Resources& res, GameObject& obj, float deltaTime);
 void createTiles(const SDLState& state, GameState& gs, const Resources& res);
-void checkCollision(GameObject& objA, GameObject& objB);
+void checkCollision(const Resources& res, GameObject& objA, GameObject& objB);
 void handleKeyInput(const SDLState& state, GameObject& obj, SDL_Scancode key, bool keyDown);
 void drawParallaxBackground(const SDLState& state, SDL_Texture* tex, float xVelocity, float& scrollPos, float scrollFactor, float deltaTime);
 void handleMouseInput(GameState& gs, const Resources& res, GameObject& obj, uint8_t button, bool isPressed);
@@ -309,11 +309,11 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
 		obj.velocity.y += GRAVITY * deltaTime;
 	}
 
+	float currentDirection = 0;
 	switch (obj.type)
 	{
 		case ObjectType::player:
 		{
-			float currentDirection = 0;
 			glm::vec2 moveAmount = glm::vec2(0);
 
 			if (state.keys[SDL_SCANCODE_A])
@@ -324,8 +324,6 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
 			{
 				currentDirection += 1;
 			}
-
-			if (currentDirection != 0) obj.direction = currentDirection;
 
 			obj.data.player.shootTimer.step(deltaTime);
 			handleShooting(gs, res, obj);
@@ -383,12 +381,41 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
 				}
 			}
 
-			// add acceleration to current velocity
-			obj.velocity.x += obj.acceleration.x * currentDirection * deltaTime;
-			if (std::abs(obj.velocity.x) > obj.maxSpeed.x) obj.velocity.x = obj.maxSpeed.x * currentDirection;
+			break;
+		}
+		case ObjectType::bullet:
+		{
+			switch (obj.data.bullet.state)
+			{
+				case BulletState::moving:
+				{
+					if (obj.position.x - gs.mapViewport.x < 0 || // left edge
+						obj.position.x - gs.mapViewport.x > state.logW || // right edge
+						obj.position.y - gs.mapViewport.y < 0 || // top edge
+						obj.position.y - gs.mapViewport.y > state.logH) // bottom edge
+					{
+						obj.data.bullet.state = BulletState::inactive;
+					}
+					break;
+				}
+				case BulletState::colliding:
+				{
+					if (obj.animations[obj.currentAnimation].isDone())
+					{
+						obj.data.bullet.state = BulletState::inactive;
+					}
+					break;
+				}
+			}
 			break;
 		}
 	}
+
+	if (currentDirection != 0) obj.direction = currentDirection;
+
+	// add acceleration to current velocity
+	obj.velocity.x += obj.acceleration.x * currentDirection * deltaTime;
+	if (std::abs(obj.velocity.x) > obj.maxSpeed.x) obj.velocity.x = obj.maxSpeed.x * currentDirection;
 
 	// add velocity to position
 	obj.position += obj.velocity * deltaTime;
@@ -403,7 +430,7 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
 			{
 				if (&other != &obj)
 				{
-					checkCollision(obj, other);
+					checkCollision(res, obj, other);
 
 					if (obj.gravityEnabled && other.type == ObjectType::level)
 					{
@@ -442,60 +469,54 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
 	}
 }
 
-void collisionResponse(GameObject& objA, GameObject& objB, const SDL_FRect& rectC)
+void collisionResponse(const Resources& res, GameObject& objA, GameObject& objB, const SDL_FRect& rectC)
 {
+	const auto genericResponse = [&]() {
+			if (rectC.h < rectC.w) // vertical collision
+			{
+				if (objA.velocity.y > 0) objA.position.y -= rectC.h; // going down
+				else if (objA.velocity.y < 0) objA.position.y += rectC.h; // going up
+
+				objA.velocity.y = 0;
+			}
+			else // horizontal collision
+			{
+				if (objA.velocity.x > 0) objA.position.x -= rectC.w; // going right
+				else if (objA.velocity.x < 0) objA.position.x += rectC.w; // going left
+
+				objA.velocity.x = 0;
+			}
+		};
+
 	if (objA.type == ObjectType::player)
 	{
 		switch (objB.type)
 		{
 			case ObjectType::level:
 			{
-				if (rectC.h < rectC.w) // vertical collision
-				{
-					if (objA.velocity.y > 0) objA.position.y -= rectC.h; // going down
-					else if (objA.velocity.y < 0) objA.position.y += rectC.h; // going up
-
-					objA.velocity.y = 0;
-				}
-				else // horizontal collision
-				{
-					if (objA.velocity.x > 0) objA.position.x -= rectC.w; // going right
-					else if (objA.velocity.x < 0) objA.position.x += rectC.w; // going left
-
-					objA.velocity.x = 0;
-				}
+				genericResponse();
 				break;
 			}
 		}
 	}
 	else if (objA.type == ObjectType::bullet)
 	{
-		switch (objB.type)
+		switch (objA.data.bullet.state)
 		{
-			case ObjectType::level:
+			case BulletState::moving:
 			{
-				if (rectC.h < rectC.w) // vertical collision
-				{
-					if (objA.velocity.y > 0) objA.position.y -= rectC.h; // going down
-					else if (objA.velocity.y < 0) objA.position.y += rectC.h; // going up
-
-					objA.velocity.y = 0;
-				}
-				else // horizontal collision
-				{
-					if (objA.velocity.x > 0) objA.position.x -= rectC.w; // going right
-					else if (objA.velocity.x < 0) objA.position.x += rectC.w; // going left
-
-					objA.velocity.x = 0;
-				}
+				genericResponse();
+				objA.velocity *= 0;
 				objA.data.bullet.state = BulletState::colliding;
+				objA.currentAnimation = res.ANIM_BULLET_HIT;
+				objA.texture = res.bulletHitTex;
 				break;
 			}
 		}
 	}
 }
 
-void checkCollision(GameObject& objA, GameObject& objB)
+void checkCollision(const Resources& res, GameObject& objA, GameObject& objB)
 {
 	SDL_FRect rectA{
 		.x = objA.position.x + objA.collider.x,
@@ -515,7 +536,7 @@ void checkCollision(GameObject& objA, GameObject& objB)
 
 	if (SDL_GetRectIntersectionFloat(&rectA, &rectB, &rectC))
 	{
-		collisionResponse(objA, objB, rectC);
+		collisionResponse(res, objA, objB, rectC);
 	}
 }
 
@@ -691,6 +712,7 @@ void handleShooting(GameState& gs, const Resources& res, GameObject& player)
 		};
 		newBullet.animations = res.bulletAnims;
 		newBullet.dynamic = true;
+		newBullet.maxSpeed = glm::vec2(1000, 0);
 
 		gs.bullets.push_back(newBullet);
 		b = &gs.bullets.back();
@@ -699,7 +721,10 @@ void handleShooting(GameState& gs, const Resources& res, GameObject& player)
 	float xPos = player.direction == 1 ? player.position.x + TILE_SIZE - 8 : player.position.x;
 	b->position = glm::vec2(xPos, player.position.y + (TILE_SIZE / 2));
 	b->direction = player.direction;
-	b->velocity = glm::vec2(player.velocity.x + 600.f * b->direction, 0);
+	const int yVariation = 40;
+	float yVelocity = SDL_rand(yVariation) - yVariation / 2;
+	b->velocity = glm::vec2(player.velocity.x + 600.f * b->direction, yVelocity);
 	b->currentAnimation = res.ANIM_BULLET;
+	b->animations[res.ANIM_BULLET_HIT].reset();
 	b->texture = res.bulletTex;
 }

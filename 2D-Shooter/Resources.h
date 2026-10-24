@@ -47,7 +47,7 @@ struct Resources
 
 		bulletAnims.resize(2);
 		bulletAnims[ANIM_BULLET] = Animation(4, 0.5f);
-		bulletAnims[ANIM_BULLET_HIT] = Animation(4, 0.5f);
+		bulletAnims[ANIM_BULLET_HIT] = Animation(4, 0.2f);
 		bulletTex = loadTexture(state.renderer, bulletTexFilePath);
 		bulletHitTex = loadTexture(state.renderer, bulletHitTexFilePath);
 

@@ -20,4 +20,11 @@ struct Animation
 	{
 		timer.step(deltaTime);
 	}
+
+	bool isDone() const { return timer.isTimeout(); }
+
+	void reset()
+	{
+		timer.reset();
+	}
 };
