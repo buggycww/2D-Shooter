@@ -4,11 +4,14 @@ struct SDLState
 {
 	SDL_Window* window;
 	SDL_Renderer* renderer;
+	MIX_Mixer* mixer;
+
 	int width, height, logW, logH;
 	const bool* keys;
+	bool fullscreen = false;
 
 	SDLState()
-		: window(nullptr), renderer(nullptr),
+		: window(nullptr), renderer(nullptr), mixer(nullptr),
 		width(0), height(0), logW(0), logH(0),
 		keys(SDL_GetKeyboardState(nullptr)) {
 	}

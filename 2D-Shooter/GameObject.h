@@ -21,7 +21,29 @@ enum class BulletState
 	moving, colliding, inactive
 };
 
-struct PlayerData
+enum class EnemyState
+{
+	idle, shambling, hit, dead
+};
+
+struct CharacterData
+{
+	float health = 100;
+	bool isDead = false;
+	Timer hitTimer;
+
+	CharacterData() : hitTimer(0.5) {}
+
+	void Damage(float dmg)
+	{
+		if (isDead) return;
+
+		health = std::max(health - dmg, 0.f);
+		if (health == 0) isDead = true;
+	}
+};
+
+struct PlayerData : CharacterData
 {
 	PlayerState state;
 	bool isShooting = false;
@@ -29,7 +51,12 @@ struct PlayerData
 	PlayerData() : state(PlayerState::idle), shootTimer(0.2) {}
 };
 
-struct EnemyData {};
+struct EnemyData : CharacterData
+{
+	EnemyState state;
+	EnemyData() : state(EnemyState::idle) {}
+};
+
 struct LevelData {};
 
 struct BulletData
@@ -51,6 +78,7 @@ struct GameObject
 	ObjectType type;
 	ObjectData data;
 	glm::vec2 position, velocity, acceleration, maxSpeed;
+	glm::vec2 impulse;
 	float direction;
 	bool dynamic = false;
 	bool gravityEnabled = false;
@@ -58,20 +86,25 @@ struct GameObject
 	SDL_FRect collider;
 
 	std::vector<Animation> animations;
-	int textureSize;
 	int currentAnimation;
 
 	SDL_Texture* texture;
+	int textureSize;
+	int spriteFrame;
 
-	GameObject() : data{.level = LevelData()}
+	Timer flashTimer;
+	bool shouldFlash = false;
+
+	GameObject() : data{.level = LevelData()}, flashTimer(0.1f)
 	{
 		type = ObjectType::level;
 		direction = 1;
-		position = velocity = acceleration = glm::vec2(0);
+		position = velocity = acceleration = impulse = glm::vec2(0);
 		maxSpeed = glm::vec2(0);
 		collider = { .x = 0, .y = 0, .w = TILE_SIZE, .h = TILE_SIZE };
 		currentAnimation = -1;
 		textureSize = TILE_SIZE;
 		texture = nullptr;
+		spriteFrame = 1;
 	}
 };

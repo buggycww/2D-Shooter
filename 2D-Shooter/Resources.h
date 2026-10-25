@@ -9,17 +9,27 @@ struct Resources
 	const int ANIM_PLAYER_SHOOTRUN = 4;
 	const int ANIM_PLAYER_SHOOTSLIDE = 5;
 
+	const int ANIM_ENEMY_IDLE = 0;
+	const int ANIM_ENEMY_HIT = 1;
+	const int ANIM_ENEMY_DIE = 2;
+
 	const int ANIM_BULLET = 0;
 	const int ANIM_BULLET_HIT = 1;
 
 	std::vector<Animation> playerAnims;
+	std::vector<Animation> enemyAnims;
 	std::vector<Animation> bulletAnims;
 
 	std::vector<SDL_Texture*> textures;
 	SDL_Texture* idleTex, * runTex, * slideTex, * shootTex, * shootRunTex, *shootSlideTex,
+		* enemyTex, * enemyHitTex, * enemyDieTex,
 		* bulletTex, * bulletHitTex,
 		* groundTex, * grassTex, * panelTex, * brickTex,
 		* bg1Tex, * bg2Tex, * bg3Tex, * bg4Tex;
+
+	std::vector<MIX_Audio*> audios;
+	MIX_Audio* audioShoot, * audioShootHit, * audioJump,
+		* audioEnemyHit, * audioEnemyDie, * audioBgMusic;
 
 	SDL_Texture* loadTexture(SDL_Renderer* renderer, const char* filePath)
 	{
@@ -28,6 +38,13 @@ struct Resources
 		textures.push_back(tex);
 		return tex;
 	}
+
+	MIX_Audio* loadAudio(MIX_Mixer* mixer, const char* filePath)
+	{
+		MIX_Audio* audio = MIX_LoadAudio(mixer, filePath, false);
+		audios.push_back(audio);
+		return audio;
+	} 
 
 	void load(SDLState& state)
 	{
@@ -45,6 +62,14 @@ struct Resources
 		slideTex = loadTexture(state.renderer, slideTexFilePath);
 		shootSlideTex = loadTexture(state.renderer, shootSlideTexFilePath);
 
+		enemyAnims.resize(3);
+		enemyAnims[ANIM_ENEMY_IDLE] = Animation(8, 1.6f);
+		enemyAnims[ANIM_ENEMY_HIT] = Animation(8, 1.0f);
+		enemyAnims[ANIM_ENEMY_DIE] = Animation(18, 3.5f);
+		enemyTex = loadTexture(state.renderer, enemyTexFilePath);
+		enemyHitTex = loadTexture(state.renderer, enemyHitTexFilePath);
+		enemyDieTex = loadTexture(state.renderer, enemyDieTexFilePath);
+
 		bulletAnims.resize(2);
 		bulletAnims[ANIM_BULLET] = Animation(4, 0.5f);
 		bulletAnims[ANIM_BULLET_HIT] = Animation(4, 0.2f);
@@ -59,6 +84,13 @@ struct Resources
 		bg2Tex = loadTexture(state.renderer, bg2FilePath);
 		bg3Tex = loadTexture(state.renderer, bg3FilePath);
 		bg4Tex = loadTexture(state.renderer, bg4FilePath);
+
+		audioBgMusic = loadAudio(state.mixer, audioBgMusicFilePath);
+		audioShoot = loadAudio(state.mixer, audioShootFilePath);
+		audioShootHit = loadAudio(state.mixer, audioShootHitFilePath);
+		audioEnemyHit = loadAudio(state.mixer, audioEnemyHitFilePath);
+		audioEnemyDie = loadAudio(state.mixer, audioEnemyDieFilePath);
+		audioJump = loadAudio(state.mixer, audioJumpFilePath);
 	}
 
 	void unload(SDLState& state)
@@ -66,6 +98,11 @@ struct Resources
 		for (SDL_Texture* tex : textures)
 		{
 			SDL_DestroyTexture(tex);
+		}
+
+		for (MIX_Audio* audio : audios)
+		{
+			MIX_DestroyAudio(audio);
 		}
 	}
 };

@@ -8,6 +8,11 @@ inline constexpr const char* shootRunTexFilePath = "data/shoot_run.png";
 inline constexpr const char* slideTexFilePath = "data/slide.png";
 inline constexpr const char* shootSlideTexFilePath = "data/slide_shoot.png";
 
+// enemy
+inline constexpr const char* enemyTexFilePath = "data/enemy.png";
+inline constexpr const char* enemyHitTexFilePath = "data/enemy_hit.png";
+inline constexpr const char* enemyDieTexFilePath = "data/enemy_die.png";
+
 // bullet
 inline constexpr const char* bulletTexFilePath = "data/bullet.png";
 inline constexpr const char* bulletHitTexFilePath = "data/bullet_hit.png";
@@ -23,4 +28,12 @@ inline constexpr const char* groundFilePath = "data/tiles/ground.png";
 inline constexpr const char* brickFilePath = "data/tiles/brick.png";
 inline constexpr const char* grassFilePath = "data/tiles/grass.png";
 inline constexpr const char* panelFilePath = "data/tiles/panel.png";
+
+// audio
+inline constexpr const char* audioShootFilePath = "data/audio/shoot.wav";
+inline constexpr const char* audioJumpFilePath = "data/audio/jump (mp3cut.net).wav";
+inline constexpr const char* audioShootHitFilePath = "data/audio/wall_hit.wav";
+inline constexpr const char* audioEnemyHitFilePath = "data/audio/enemy_hit.wav";
+inline constexpr const char* audioEnemyDieFilePath = "data/audio/monster_die.wav";
+inline constexpr const char* audioBgMusicFilePath = "data/audio/Juhani Junkala [Retro Game Music Pack] Level 1.mp3";
 

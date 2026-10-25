@@ -12,4 +12,7 @@ inline constexpr int TILE_SIZE = 32;
 
 // game constants
 inline constexpr float GRAVITY = 500;
+inline constexpr float DRAG = 500;
+inline constexpr float KNOCKBACK = 300;
 inline constexpr float JUMP_FORCE = -200;
+inline constexpr float BULLET_DMG = 20;
