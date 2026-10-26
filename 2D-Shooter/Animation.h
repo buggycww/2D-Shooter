@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+
 #include "Timer.h"
 
 struct Animation
@@ -13,7 +15,10 @@ struct Animation
 	const float getLength() { return timer.getLength(); }
 	const int currentFrame()
 	{
-		return static_cast<int>(timer.getTime() / timer.getLength() * frameCount);
+		if (frameCount <= 0 || timer.getLength() <= 0) return 0;
+
+		const int frame = static_cast<int>(timer.getTime() / timer.getLength() * frameCount);
+		return std::min(frame, frameCount - 1); // timer can overshoot by more than one frame
 	}
 
 	void step(float deltaTime)

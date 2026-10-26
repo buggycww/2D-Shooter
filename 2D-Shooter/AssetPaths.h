@@ -28,6 +28,7 @@ inline constexpr const char* groundFilePath = "data/tiles/ground.png";
 inline constexpr const char* brickFilePath = "data/tiles/brick.png";
 inline constexpr const char* grassFilePath = "data/tiles/grass.png";
 inline constexpr const char* panelFilePath = "data/tiles/panel.png";
+inline constexpr const char* tilesPath = "data/tiles/";
 
 // audio
 inline constexpr const char* audioShootFilePath = "data/audio/shoot.wav";
@@ -37,3 +38,6 @@ inline constexpr const char* audioEnemyHitFilePath = "data/audio/enemy_hit.wav";
 inline constexpr const char* audioEnemyDieFilePath = "data/audio/monster_die.wav";
 inline constexpr const char* audioBgMusicFilePath = "data/audio/Juhani Junkala [Retro Game Music Pack] Level 1.mp3";
 
+// map
+inline constexpr const char* smallMapFilePath = "data/maps/smallmap.tmx";
+inline constexpr const char* largeMapFilePath = "data/maps/largemap.tmx";

@@ -8,7 +8,7 @@ inline constexpr int MAP_ROWS = 5;
 inline constexpr int MAP_COLUMNS = 50;
 
 // tile constants
-inline constexpr int TILE_SIZE = 32;
+inline int TILE_SIZE = 32;
 
 // game constants
 inline constexpr float GRAVITY = 500;

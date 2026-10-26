@@ -101,7 +101,7 @@ struct GameObject
 		direction = 1;
 		position = velocity = acceleration = impulse = glm::vec2(0);
 		maxSpeed = glm::vec2(0);
-		collider = { .x = 0, .y = 0, .w = TILE_SIZE, .h = TILE_SIZE };
+		collider = { .x = 0, .y = 0, .w = static_cast<float>(TILE_SIZE), .h = static_cast<float>(TILE_SIZE) };
 		currentAnimation = -1;
 		textureSize = TILE_SIZE;
 		texture = nullptr;
