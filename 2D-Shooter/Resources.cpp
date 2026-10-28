@@ -1,7 +1,5 @@
 #include "Resources.h"
-#include "SDL3/SDL.h"
 #include "SDL3_image/SDL_image.h"
-#include "SDL3_mixer/SDL_mixer.h"
 #include "GameStates.h"
 #include "Animation.h"
 #include "AssetPaths.h"
@@ -13,18 +11,16 @@ Resources::~Resources() = default;
 SDL_Texture* Resources::loadTexture(SDL_Renderer* renderer, const char* filePath)
 {
 	SDL_Texture* tex = IMG_LoadTexture(renderer, filePath);
+	assert(tex); // crash instead of proceeding in unpredictable state
 	SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_NEAREST);
-	textures.push_back(tex);
+	textures.emplace_back(tex);
 	return tex;
 }
 
-SpriteSheet* Resources::loadSheet(SDL_Renderer* renderer, const char* path, int frameCount)
+const SpriteSheet* Resources::loadSheet(SDL_Renderer* renderer, const char* path, int frameCount)
 {
-	SDL_Texture* tex = IMG_LoadTexture(renderer, path);
-	if (!tex) {
-		SDL_Log("Failed to load texture '%s': %s", path, SDL_GetError());
-		return {};
-	}
+	SDL_Texture* tex = loadTexture(renderer, path);
+	if (!tex) return nullptr;
 
 	float w = 0, h = 0;
 	SDL_GetTextureSize(tex, &w, &h);
@@ -33,13 +29,18 @@ SpriteSheet* Resources::loadSheet(SDL_Renderer* renderer, const char* path, int 
 	if (frameWidth * frameCount != static_cast<int>(w))
 		SDL_Log("Sheet %s: width %.0f not divisible by %d frames", path, w, frameCount);
 
-	return new SpriteSheet{ tex, frameWidth, static_cast<int>(h), frameCount };
+	auto sheet = std::make_unique<SpriteSheet>(
+		SpriteSheet{ tex, frameWidth, static_cast<int>(h), frameCount });
+
+	const SpriteSheet* result = sheet.get();
+	spriteSheets.push_back(std::move(sheet));
+	return result;
 }
 
 MIX_Audio* Resources::loadAudio(MIX_Mixer* mixer, const char* filePath)
 {
 	MIX_Audio* audio = MIX_LoadAudio(mixer, filePath, false);
-	audios.push_back(audio);
+	audios.emplace_back(audio);
 	return audio;
 }
 
@@ -106,12 +107,13 @@ void Resources::load(SDLState& state)
 	{
 		TileSetTextures tst;
 		tst.firstgid = tileSet.firstgid;
-		tst.textures.reserve(tileSet.tiles.size());
+		tst.spriteSheets.reserve(tileSet.tiles.size());
 
 		for (tmx::Tile& tile : tileSet.tiles)
 		{
 			const std::string imagePath = tilesPath + std::filesystem::path(tile.image.source).filename().string();
-			tst.textures.push_back(loadTexture(state.renderer, imagePath.c_str()));
+			const SpriteSheet* sheet = loadSheet(state.renderer, imagePath.c_str(), 1);
+			tst.spriteSheets.push_back(sheet);
 		}
 
 		tilesetTextures.push_back(std::move(tst));
@@ -122,13 +124,7 @@ void Resources::load(SDLState& state)
 
 void Resources::unload(SDLState& state)
 {
-	for (SDL_Texture* tex : textures)
-	{
-		SDL_DestroyTexture(tex);
-	}
-
-	for (MIX_Audio* audio : audios)
-	{
-		MIX_DestroyAudio(audio);
-	}
+	textures.clear();
+	audios.clear();
+	spriteSheets.clear();
 }

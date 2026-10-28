@@ -7,7 +7,7 @@
 
 struct SpriteSheet
 {
-	SDL_Texture* texture;
+	SDL_Texture* texture =  nullptr;
 	int frameWidth = 0;
 	int frameHeight = 0;
 	int frameCount = 0;
@@ -20,7 +20,7 @@ struct SpriteSheet
 
 struct Animation
 {
-	SpriteSheet* spriteSheet = nullptr;
+	const SpriteSheet* spriteSheet = nullptr;
 	Timer timer;
 	int frameCount;
 

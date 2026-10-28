@@ -79,10 +79,10 @@ int main(int argc, char* argv[])
 	bool running = true;
 	uint64_t prevTime = SDL_GetTicks();
 
-	MIX_Track* bgMusicTrack = MIX_CreateTrack(state.mixer);
-	MIX_SetTrackGain(bgMusicTrack, 0.5f);
-	MIX_SetTrackAudio(bgMusicTrack, res.audioBgMusic);
-	MIX_PlayTrack(bgMusicTrack, 0);
+	TrackPtr bgMusicTrack(MIX_CreateTrack(state.mixer));
+	MIX_SetTrackGain(bgMusicTrack.get(), 0.5f);
+	MIX_SetTrackAudio(bgMusicTrack.get(), res.audioBgMusic);
+	MIX_PlayTrack(bgMusicTrack.get(), 0);
 
 	while (running)
 	{
@@ -787,13 +787,13 @@ void createTiles(const SDLState& state, GameState& gs, const Resources& res)
 					{
 						const auto itr = std::find_if(res.tilesetTextures.begin(), res.tilesetTextures.end(),
 							[tGid](const TileSetTextures& tst) {
-								return tGid >= tst.firstgid && tGid < tst.firstgid + tst.textures.size();
+								return tGid >= tst.firstgid && tGid < tst.firstgid + tst.spriteSheets.size();
 							});
 						if (itr == res.tilesetTextures.end()) continue; // no tileset has this gid
 
-						SDL_Texture* tex = itr->textures[tGid - itr->firstgid];
+						const SpriteSheet* spriteSheet = itr->spriteSheets[tGid - itr->firstgid];
 
-						newLayer.push_back(factory.makeTile(glm::vec2(c * res.map->tileWidth, r * res.map->tileHeight), tex, layer.name == "Level"));
+						newLayer.push_back(factory.makeTile(glm::vec2(c * res.map->tileWidth, r * res.map->tileHeight), spriteSheet, layer.name == "Level"));
 					}
 				}
 			}

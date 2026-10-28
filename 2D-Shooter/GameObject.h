@@ -87,9 +87,7 @@ struct GameObject
 
 	std::vector<Animation> animations;
 	int currentAnimation;
-	SpriteSheet* sprite = nullptr;
-	/*SDL_Texture* texture;
-	int textureSize;*/
+	const SpriteSheet* sprite = nullptr;
 	int spriteFrame;
 
 	Timer flashTimer;
@@ -103,8 +101,13 @@ struct GameObject
 		maxSpeed = glm::vec2(0);
 		collider = { .x = 0, .y = 0, .w = static_cast<float>(TILE_SIZE), .h = static_cast<float>(TILE_SIZE) };
 		currentAnimation = -1;
-		/*textureSize = TILE_SIZE;
-		texture = nullptr;*/
 		spriteFrame = 1;
+	}
+
+	void playAnimation(int index)
+	{
+		currentAnimation = index;
+		sprite = animations[index].spriteSheet;
+		animations[index].reset();
 	}
 };
