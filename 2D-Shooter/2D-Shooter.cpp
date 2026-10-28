@@ -16,6 +16,7 @@
 
 #include "AssetPaths.h"
 #include "GameObject.h"
+#include "GameObjectFactory.h"
 #include "GlobalConstants.h"
 #include "GameStates.h"
 #include "Resources.h"
@@ -68,7 +69,11 @@ int main(int argc, char* argv[])
 	}
 
 	// setup viewport
-	gs.mapViewport.y = res.map->mapHeight * res.map->tileHeight - gs.mapViewport.h;
+	gs.maxViewportPos = glm::vec2(
+		res.map->mapWidth * TILE_SIZE - state.logW,
+		res.map->mapHeight * res.map->tileHeight - gs.mapViewport.h
+	);
+	gs.mapViewport.y = gs.maxViewportPos.y;
 
 	// game loop
 	bool running = true;
@@ -160,6 +165,29 @@ int main(int argc, char* argv[])
 
 		// calculate viewport position
 		gs.mapViewport.x = (gs.getPlayer().position.x + TILE_SIZE / 2) - (gs.mapViewport.w / 2);
+		gs.mapViewport.x = std::clamp(gs.mapViewport.x, 0.f, gs.maxViewportPos.x);
+
+		// viewport.y upper and lower band that player is allowed to move within without affecting camera
+		const float topEdge = gs.mapViewport.y + gs.mapViewport.h * 0.35f;
+		const float botEdge = gs.mapViewport.y + gs.mapViewport.h * 0.65f;
+		const float playerCenterY = gs.getPlayer().position.y + TILE_SIZE / 2.f;
+
+		float targetY = gs.mapViewport.y;   // default: don't move
+
+		if (playerCenterY < topEdge) {
+			// player below band
+			targetY = playerCenterY - gs.mapViewport.h * 0.35f;
+		}
+		else if (playerCenterY > botEdge) {
+			// player above band
+			targetY = playerCenterY - gs.mapViewport.h * 0.65f;
+		}
+
+		targetY = std::clamp(targetY, 0.f, gs.maxViewportPos.y);
+
+		// lerp
+		const float t = 1.f - std::exp(-20.f * deltaTime);
+		gs.mapViewport.y += (targetY - gs.mapViewport.y) * t;
 
 		// perform drawing commands
 		SDL_SetRenderDrawColor(state.renderer, 20, 10, 30, 255);
@@ -195,7 +223,7 @@ int main(int argc, char* argv[])
 			SDL_RenderDebugText(state.renderer, 5, 5,
 				std::format("State: {}, Grounded: {}, Bullets: {}, xVelocity: {}",
 					static_cast<int>(gs.getPlayer().data.player.state),
-					gs.getPlayer().grounded, gs.bullets.size(), gs.getPlayer().velocity.x
+					gs.getPlayer().grounded, gs.bullets.size(), res.map->mapWidth
 				).c_str()
 			);
 		}
@@ -278,31 +306,31 @@ void drawObject(const SDLState& state, const GameState& gs, GameObject& obj, flo
 
 	SDL_FRect srcRect
 	{
-		.x = frameX * obj.textureSize,
+		.x = frameX * obj.sprite->frameWidth,
 		.y = 0,
-		.w = static_cast<float>(obj.textureSize),
-		.h = static_cast<float>(obj.textureSize)
+		.w = static_cast<float>(obj.sprite->frameWidth),
+		.h = static_cast<float>(obj.sprite->frameHeight)
 	};
 
 	SDL_FRect dstRect
 	{                                
 		.x = obj.position.x - gs.mapViewport.x,
 		.y = obj.position.y - gs.mapViewport.y,
-		.w = static_cast<float>(obj.textureSize),
-		.h = static_cast<float>(obj.textureSize)
+		.w = static_cast<float>(obj.sprite->frameWidth),
+		.h = static_cast<float>(obj.sprite->frameHeight)
 	};
 
 	SDL_FlipMode flipMode = obj.direction == -1 ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
 	if (!obj.shouldFlash) 
 	{
-		SDL_RenderTextureRotated(state.renderer, obj.texture, &srcRect, &dstRect, 0, nullptr, flipMode);
+		SDL_RenderTextureRotated(state.renderer, obj.sprite->texture, &srcRect, &dstRect, 0, nullptr, flipMode);
 	}
 	else
 	{
 		// flash
-		SDL_SetTextureColorModFloat(obj.texture, 2.5f, 1.f, 1.f);
-		SDL_RenderTextureRotated(state.renderer, obj.texture, &srcRect, &dstRect, 0, nullptr, flipMode);
-		SDL_SetTextureColorModFloat(obj.texture, 1.f, 1.f, 1.f);
+		SDL_SetTextureColorModFloat(obj.sprite->texture, 2.5f, 1.f, 1.f);
+		SDL_RenderTextureRotated(state.renderer, obj.sprite->texture, &srcRect, &dstRect, 0, nullptr, flipMode);
+		SDL_SetTextureColorModFloat(obj.sprite->texture, 1.f, 1.f, 1.f);
 
 		obj.flashTimer.step(deltaTime);
 		if (obj.flashTimer.isTimeout()) obj.shouldFlash = false;
@@ -389,7 +417,7 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
 					}
 
 					obj.currentAnimation = obj.data.player.isShooting ? res.ANIM_PLAYER_SHOOT : res.ANIM_PLAYER_IDLE;
-					obj.texture = obj.data.player.isShooting ? res.shootTex : res.idleTex;
+					obj.sprite = obj.animations[obj.currentAnimation].spriteSheet;
 					break;
 				}
 				case PlayerState::running:
@@ -403,12 +431,12 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
 					if (obj.velocity.x * obj.direction < 0 && obj.grounded)
 					{
 						obj.currentAnimation = obj.data.player.isShooting ? res.ANIM_PLAYER_SHOOTSLIDE : res.ANIM_PLAYER_SLIDE;
-						obj.texture = obj.data.player.isShooting ? res.shootSlideTex : res.slideTex;
+						obj.sprite = obj.animations[obj.currentAnimation].spriteSheet;
 					}
 					else
 					{
 						obj.currentAnimation = res.ANIM_PLAYER_RUN; // use same index to keep run cycle consistent
-						obj.texture = obj.data.player.isShooting ? res.shootRunTex : res.runTex;
+						obj.sprite = obj.animations[obj.currentAnimation].spriteSheet;
 					}
 
 					break;
@@ -416,7 +444,7 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
 				case PlayerState::jumping:
 				{
 					obj.currentAnimation = res.ANIM_PLAYER_RUN;
-					obj.texture = obj.data.player.isShooting ? res.shootRunTex : res.runTex;
+					obj.sprite = obj.animations[obj.currentAnimation].spriteSheet;
 					break;
 				}
 			}
@@ -480,7 +508,7 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
 					{
 						obj.data.enemy.state = EnemyState::idle;
 						obj.currentAnimation = res.ANIM_ENEMY_IDLE;
-						obj.texture = res.enemyTex;
+						obj.sprite = obj.animations[obj.currentAnimation].spriteSheet;
 					}
 					break;
 				}
@@ -659,14 +687,14 @@ void collisionResponse(const SDLState& state, const Resources& res, GameObject& 
 							{
 								objB.data.enemy.state = EnemyState::dead;
 								objB.currentAnimation = res.ANIM_ENEMY_DIE;
-								objB.texture = res.enemyDieTex;
+								objB.sprite = objB.animations[objB.currentAnimation].spriteSheet;
 								MIX_PlayAudio(state.mixer, res.audioEnemyDie);
 							}
 							else
 							{
 								objB.data.enemy.state = EnemyState::hit;
 								objB.currentAnimation = res.ANIM_ENEMY_HIT;
-								objB.texture = res.enemyHitTex;
+								objB.sprite = objB.animations[objB.currentAnimation].spriteSheet;
 							}
 							break;
 						}
@@ -678,7 +706,7 @@ void collisionResponse(const SDLState& state, const Resources& res, GameObject& 
 						objA.velocity *= 0;
 						objA.data.bullet.state = BulletState::colliding;
 						objA.currentAnimation = res.ANIM_BULLET_HIT;
-						objA.texture = res.bulletHitTex;
+						objA.sprite = objA.animations[objA.currentAnimation].spriteSheet;
 					}
 					break;
 				}
@@ -740,20 +768,9 @@ void createTiles(const SDLState& state, GameState& gs, const Resources& res)
 	{
 		GameState& gs;
 		const Resources& res;
+		GameObjectFactory factory;
 
-		LayerVisitor(GameState& gs, const Resources& res) : gs(gs), res(res) {}
-
-		auto createObject(int r, int c, ObjectType type, SDL_Texture* texture) 
-		{
-			GameObject o;
-			o.type = type;
-			o.texture = texture;
-			o.position = glm::vec2(
-				c * res.map->tileWidth, 
-				r * res.map->tileHeight);
-			o.collider = { .x = 0, .y = 0, .w = static_cast<float>(TILE_SIZE), .h = static_cast<float>(TILE_SIZE) };
-			return o;
-		}
+		LayerVisitor(GameState& gs, const Resources& res) : gs(gs), res(res), factory(res) {}
 
 		void operator()(tmx::Layer& layer)
 		{
@@ -776,12 +793,7 @@ void createTiles(const SDLState& state, GameState& gs, const Resources& res)
 
 						SDL_Texture* tex = itr->textures[tGid - itr->firstgid];
 
-						auto tile = createObject(r, c, ObjectType::level, tex);
-						if (layer.name != "Level")
-						{
-							tile.collider.w = tile.collider.h = 0;
-						}
-						newLayer.push_back(std::move(tile));
+						newLayer.push_back(factory.makeTile(glm::vec2(c * res.map->tileWidth, r * res.map->tileHeight), tex, layer.name == "Level"));
 					}
 				}
 			}
@@ -800,32 +812,13 @@ void createTiles(const SDLState& state, GameState& gs, const Resources& res)
 
 				if (obj.type == "Player")
 				{
-					GameObject player = createObject(1, 1, ObjectType::player, res.idleTex);
-					player.position = objPos;
-					player.data.player = PlayerData();
-					player.animations = res.playerAnims;
-					player.currentAnimation = res.ANIM_PLAYER_IDLE;
-					player.acceleration = glm::vec2(300, 0);
-					player.maxSpeed.x = 100.f;
-					player.collider = { .x = 12, .y = 6, .w = 10, .h = 26 };
-					player.dynamic = true;
-					player.gravityEnabled = true;
-					newLayer.push_back(std::move(player));
+					newLayer.push_back(factory.makePlayer(objPos));
 					gs.playerLayer = static_cast<int>(gs.layers.size());
 					gs.playerIndex = static_cast<int>(newLayer.size()) - 1;
 				}
 				else if (obj.type == "Enemy")
 				{
-					GameObject enemy = createObject(1, 1, ObjectType::enemy, res.enemyTex);
-					enemy.position = objPos;
-					enemy.data.enemy = EnemyData();
-					enemy.animations = res.enemyAnims;
-					enemy.currentAnimation = res.ANIM_ENEMY_IDLE;
-					enemy.collider = { .x = 10, .y = 6, .w = 12, .h = 26 };
-					enemy.dynamic = true;
-					enemy.maxSpeed.x = 70.f;
-					enemy.gravityEnabled = true;
-					newLayer.push_back(std::move(enemy));
+					newLayer.push_back(factory.makeEnemy(objPos));
 				}
 			}
 			gs.layers.push_back(std::move(newLayer));
@@ -880,52 +873,31 @@ void handleMouseInput(GameState& gs, const Resources& res, GameObject& obj, uint
 void handleShooting(const SDLState& state, GameState& gs, const Resources& res, GameObject& player)
 {
 	if (!player.data.player.isShooting) return;
-	if (player.data.player.isShooting && !player.data.player.shootTimer.isTimeout()) return;
+	if (!player.data.player.shootTimer.isTimeout()) return;
 
 	player.data.player.shootTimer.reset();
 
-	auto itr = std::find_if(gs.bullets.begin(), gs.bullets.end(),
-		[&gs](const GameObject& bullet) {
+	const float xPos = player.direction > 0
+		? player.position.x + static_cast<float>(TILE_SIZE) - 8.f
+		: player.position.x;
+
+	const glm::vec2 spawnPos(xPos, player.position.y + static_cast<float>(TILE_SIZE) * 0.5f);
+
+	const int yVariation = 40;
+	const float yVelocity = static_cast<float>(SDL_rand(yVariation) - yVariation / 2);
+
+	const glm::vec2 velocity(player.velocity.x + 600.f * player.direction, yVelocity);
+
+	GameObjectFactory factory(res);
+
+	auto itr = std::find_if(
+		gs.bullets.begin(), gs.bullets.end(),
+		[](const GameObject& bullet) {
 			return bullet.data.bullet.state == BulletState::inactive;
 		});
 
-	GameObject* b = nullptr;
-	if (itr != gs.bullets.end()) // found inactive bullet from pool
-	{
-		b = &(*itr);
-		b->velocity = glm::vec2(0);
-		b->data.bullet.state = BulletState::moving;
-	}
-	else // no inactive bullet found from pool
-	{
-		GameObject newBullet;
-		newBullet.type = ObjectType::bullet;
-		newBullet.data.bullet = BulletData();
-		newBullet.textureSize = 4;
-		newBullet.collider = {
-			.x = 0, .y = 0,
-			.w = static_cast<float>(newBullet.textureSize),
-			.h = static_cast<float>(newBullet.textureSize)
-		};
-		newBullet.animations = res.bulletAnims;
-		newBullet.dynamic = true;
-		newBullet.maxSpeed = glm::vec2(1000, 0);
-
-		gs.bullets.push_back(std::move(newBullet));
-		b = &gs.bullets.back();
-	}
-
-	float xPos = player.direction > 0 ? player.position.x + TILE_SIZE - 8 : player.position.x;
-	b->position = glm::vec2(xPos, player.position.y + (TILE_SIZE / 2));
-	b->direction = player.direction;
-	const int yVariation = 40;
-	float yVelocity = SDL_rand(yVariation) - yVariation / 2;
-	b->velocity = glm::vec2(player.velocity.x + 600.f * b->direction, yVelocity);
-	b->currentAnimation = res.ANIM_BULLET;
-	b->animations[res.ANIM_BULLET].reset();
-	b->animations[res.ANIM_BULLET_HIT].reset();
-	b->shouldFlash = false;
-	b->texture = res.bulletTex;
+	if (itr != gs.bullets.end()) factory.resetBullet(*itr, spawnPos, player.direction, velocity);
+	else gs.bullets.push_back(factory.makeBullet(spawnPos, player.direction, velocity));
 
 	MIX_PlayAudio(state.mixer, res.audioShoot);
 }

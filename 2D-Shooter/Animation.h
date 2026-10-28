@@ -1,11 +1,26 @@
 #pragma once
 
 #include <algorithm>
+#include "SDL3/SDL.h"
 
 #include "Timer.h"
 
+struct SpriteSheet
+{
+	SDL_Texture* texture;
+	int frameWidth = 0;
+	int frameHeight = 0;
+	int frameCount = 0;
+
+	SDL_FRect frameRect(int frame) const
+	{
+		return { static_cast<float>(frame * frameWidth), 0.f, static_cast<float>(frameWidth), static_cast<float>(frameHeight) };
+	}
+};
+
 struct Animation
 {
+	SpriteSheet* spriteSheet = nullptr;
 	Timer timer;
 	int frameCount;
 

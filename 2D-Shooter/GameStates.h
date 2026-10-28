@@ -2,6 +2,13 @@
 
 #include <cassert>
 #include <cstddef>
+#include <vector>
+
+#include <SDL3/SDL.h>
+#include <SDL3_mixer/SDL_mixer.h>
+#include <glm/glm.hpp>
+
+#include "GameObject.h"
 
 struct SDLState
 {
@@ -25,7 +32,10 @@ struct GameState
 	std::vector<std::vector<GameObject>> layers;
 	std::vector<GameObject> bullets;
 	int playerLayer, playerIndex;
+
 	SDL_FRect mapViewport;
+	glm::vec2 maxViewportPos;
+
 	float bg2Scroll, bg3Scroll, bg4Scroll;
 	bool debugMode = false;
 
@@ -36,7 +46,7 @@ struct GameState
 		mapViewport = { .x = 0, .y = 0,
 			.w = static_cast<float>(state.logW),
 			.h = static_cast<float>(state.logH) };
-
+		maxViewportPos = glm::vec2(0);
 		bg2Scroll = bg3Scroll = bg4Scroll = 0;
 	}
 
