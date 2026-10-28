@@ -5,6 +5,7 @@
 #include <vector>
 #include <SDL3/SDL.h>
 #include "GlobalConstants.h"
+#include "HealthBar.h"
 
 enum class ObjectType
 {
@@ -28,18 +29,19 @@ enum class EnemyState
 
 struct CharacterData
 {
-	float health = 100;
+	float maxHealth = 100;
+	float health;
 	bool isDead = false;
 	Timer hitTimer;
 
-	CharacterData() : hitTimer(0.5) {}
+	CharacterData() : hitTimer(0.5), health(maxHealth) {}
 
 	void Damage(float dmg)
 	{
 		if (isDead) return;
 
 		health = std::max(health - dmg, 0.f);
-		if (health == 0) isDead = true;
+		if (health <= 0) isDead = true;
 	}
 };
 

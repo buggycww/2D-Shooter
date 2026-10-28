@@ -24,6 +24,7 @@
 void cleanupSDL(SDLState& state);
 bool initialiseSDL(SDLState& state);
 void drawObject(const SDLState& state, const GameState& gs, GameObject& obj, float deltaTime);
+void drawHealthBars(const SDLState& state, const GameState& gs, const HealthBar& bar);
 void update(const SDLState& state, GameState& gs, Resources& res, GameObject& obj, float deltaTime);
 void createTiles(const SDLState& state, GameState& gs, const Resources& res);
 void checkCollision(const SDLState& state, const Resources& res, GameObject& objA, GameObject& objB);
@@ -83,6 +84,8 @@ int main(int argc, char* argv[])
 	MIX_SetTrackGain(bgMusicTrack.get(), 0.5f);
 	MIX_SetTrackAudio(bgMusicTrack.get(), res.audioBgMusic);
 	MIX_PlayTrack(bgMusicTrack.get(), 0);
+
+	HealthBar healthBar;
 
 	while (running)
 	{
@@ -215,6 +218,9 @@ int main(int argc, char* argv[])
 				drawObject(state, gs, bullet, deltaTime);
 			}
 		}
+
+		// draw healthbars
+		drawHealthBars(state, gs, healthBar);
 
 		// display debug info
 		if (gs.debugMode)
@@ -349,6 +355,28 @@ void drawObject(const SDLState& state, const GameState& gs, GameObject& obj, flo
 		SDL_SetRenderDrawColor(state.renderer, 255, 0, 0, 150);
 		SDL_RenderFillRect(state.renderer, &rect);
 		SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_NONE);
+	}
+}
+
+void drawHealthBars(const SDLState& state, const GameState& gs, const HealthBar& bar)
+{
+	for (const auto& layer : gs.layers)
+	{
+		for (const auto& obj : layer)
+		{
+			if (obj.type != ObjectType::enemy) continue;
+
+			const CharacterData* character = &obj.data.enemy;
+
+			if (!character || !obj.sprite || character->isDead) continue;
+
+			const glm::vec2 topLeft{
+				obj.position.x - gs.mapViewport.x,
+				obj.position.y - gs.mapViewport.y
+			};
+
+			bar.Draw(state.renderer, character->health, character->maxHealth, topLeft, static_cast<float>(obj.sprite->frameWidth));
+		}
 	}
 }
 
@@ -490,6 +518,7 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
 				}
 				case EnemyState::shambling:
 				{
+
 					glm::vec2 playerDir = gs.getPlayer().position - obj.position;
 					if (glm::length(playerDir) < 100)
 					{
@@ -537,7 +566,7 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
 	{
 		// decay knockback toward max speed at DRAG
 		const float s = std::copysign(1.f, obj.velocity.x);
-		obj.velocity.x = s * std::max(std::abs(obj.velocity.x) /*- DRAG */* deltaTime, maxSpeed);
+		obj.velocity.x = s * std::max(std::abs(obj.velocity.x) - DRAG * deltaTime, maxSpeed);
 
 		// let input offset knockback
 		if (currentDirection != 0 && obj.velocity.x * currentDirection < 0)
