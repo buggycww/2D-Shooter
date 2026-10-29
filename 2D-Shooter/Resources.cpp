@@ -63,8 +63,8 @@ void Resources::load(SDLState& state)
 	playerAnims[ANIM_PLAYER_SLIDE] = Animation(1, 1.0f);
 	playerAnims[ANIM_PLAYER_SLIDE].spriteSheet = loadSheet(state.renderer, slideTexFilePath, 1);
 
-	playerAnims[ANIM_PLAYER_SHOOTSLIDE] = Animation(1, 1.0f);
-	playerAnims[ANIM_PLAYER_SHOOTSLIDE].spriteSheet = loadSheet(state.renderer, shootSlideTexFilePath, 1);
+	playerAnims[ANIM_PLAYER_SHOOTSLIDE] = Animation(4, 1.0f);
+	playerAnims[ANIM_PLAYER_SHOOTSLIDE].spriteSheet = loadSheet(state.renderer, shootSlideTexFilePath, 4);
 
 	// enemy animations
 	enemyAnims.resize(3);

@@ -20,6 +20,7 @@
 #include "GlobalConstants.h"
 #include "GameStates.h"
 #include "Resources.h"
+#include "ProfilingStats.h"
 
 void cleanupSDL(SDLState& state);
 bool initialiseSDL(SDLState& state);
@@ -32,6 +33,7 @@ void handleKeyInput(const SDLState& state, const Resources& res, GameObject& obj
 void drawParallaxBackground(const SDLState& state, SDL_Texture* tex, float cameraX, float scrollFactor);
 void handleMouseInput(GameState& gs, const Resources& res, GameObject& obj, uint8_t button, bool isPressed);
 void handleShooting(const SDLState& state, GameState& gs, const Resources& res, GameObject& player);
+void drawDebugOverlay(const SDLState& state, const GameState& gs, const Resources& res, const FrameStats& stats);
 
 int main(int argc, char* argv[])
 {
@@ -78,7 +80,9 @@ int main(int argc, char* argv[])
 
 	// game loop
 	bool running = true;
-	uint64_t prevTime = SDL_GetTicks();
+	const double perfFreq = static_cast<double>(SDL_GetPerformanceFrequency());
+	uint64_t prevCounter = SDL_GetPerformanceCounter();
+	FrameStats stats;
 
 	TrackPtr bgMusicTrack(MIX_CreateTrack(state.mixer));
 	MIX_SetTrackGain(bgMusicTrack.get(), 0.5f);
@@ -89,8 +93,9 @@ int main(int argc, char* argv[])
 
 	while (running)
 	{
-		uint64_t nowTime = SDL_GetTicks();
-		float deltaTime = (nowTime - prevTime) / 1000.f;
+		const uint64_t frameStart = SDL_GetPerformanceCounter();
+		const float deltaTime = static_cast<float>((frameStart - prevCounter) / perfFreq);
+		prevCounter = frameStart;
 
 		SDL_Event event{ 0 };
 		while (SDL_PollEvent(&event))
@@ -152,6 +157,8 @@ int main(int argc, char* argv[])
 
 		}
 
+		const uint64_t afterEvents = SDL_GetPerformanceCounter();
+
 		// update all objects
 		for (auto& layer : gs.layers)
 		{
@@ -165,6 +172,8 @@ int main(int argc, char* argv[])
 		{
 			update(state, gs, res, bullet, deltaTime);
 		}
+
+		const uint64_t afterUpdate = SDL_GetPerformanceCounter();
 
 		// calculate viewport position
 		gs.mapViewport.x = (gs.getPlayer().position.x + TILE_SIZE / 2) - (gs.mapViewport.w / 2);
@@ -222,21 +231,16 @@ int main(int argc, char* argv[])
 		// draw healthbars
 		drawHealthBars(state, gs, healthBar);
 
+		const uint64_t afterDraw = SDL_GetPerformanceCounter();
+		stats.Add(deltaTime,
+			static_cast<float>((afterUpdate - afterEvents) / perfFreq),
+			static_cast<float>((afterDraw - afterUpdate) / perfFreq));
+
 		// display debug info
-		if (gs.debugMode)
-		{
-			SDL_SetRenderDrawColor(state.renderer, 255, 255, 255, 255);
-			SDL_RenderDebugText(state.renderer, 5, 5,
-				std::format("State: {}, Grounded: {}, Bullets: {}, xVelocity: {}",
-					static_cast<int>(gs.getPlayer().data.player.state),
-					gs.getPlayer().grounded, gs.bullets.size(), res.map->mapWidth
-				).c_str()
-			);
-		}
+		if (gs.debugMode) drawDebugOverlay(state, gs, res, stats);
 
 		// swap buffers and present
 		SDL_RenderPresent(state.renderer);
-		prevTime = nowTime;
 	}
 
 	// cleanup
@@ -929,4 +933,71 @@ void handleShooting(const SDLState& state, GameState& gs, const Resources& res, 
 	else gs.bullets.push_back(factory.makeBullet(spawnPos, player.direction, velocity));
 
 	MIX_PlayAudio(state.mixer, res.audioShoot);
+}
+
+void drawDebugOverlay(const SDLState& state, const GameState& gs, const Resources& res, const FrameStats& stats)
+{
+	if (!gs.hasPlayer()) return;
+
+	const GameObject& player =
+		gs.layers[gs.playerLayer][gs.playerIndex];
+
+	int activeBullets = 0;
+	for (const GameObject& bullet : gs.bullets)
+		if (bullet.data.bullet.state != BulletState::inactive)
+			++activeBullets;
+
+	int enemies = 0;
+	int objects = 0;
+	for (const auto& layer : gs.layers)
+	{
+		objects += static_cast<int>(layer.size());
+		for (const GameObject& obj : layer)
+			if (obj.type == ObjectType::enemy && !obj.data.enemy.isDead)
+				++enemies;
+	}
+
+	static constexpr const char* stateNames[] =
+	{
+		"idle", "running", "jumping"
+	};
+	const int stateIndex = static_cast<int>(player.data.player.state);
+	const char* stateName =
+		(stateIndex >= 0 && stateIndex < 3) ? stateNames[stateIndex] : "?";
+
+	const std::array<std::string, 6> lines{
+		std::format("FPS {:6.1f}   frame {:6.2f} ms   worst {:6.2f} ms",
+			stats.fps, stats.frameMs, stats.worstFrameMs),
+		std::format("update {:5.2f} ms   draw {:5.2f} ms",
+			stats.updateMs, stats.drawMs),
+		std::format("player ({:7.1f},{:7.1f})   vel ({:6.1f},{:6.1f})",
+			player.position.x, player.position.y,
+			player.velocity.x, player.velocity.y),
+		std::format("state {:<7} grounded {:<3} hp {:.0f}/{:.0f}",
+			stateName, player.grounded ? "yes" : "no",
+			player.data.player.health, player.data.player.maxHealth),
+		std::format("bullets {}/{}   enemies {}   objects {}",
+			activeBullets, gs.bullets.size(), enemies, objects),
+		std::format("camera ({:.1f},{:.1f})   map {}x{}",
+			gs.mapViewport.x, gs.mapViewport.y,
+			res.map->mapWidth, res.map->mapHeight)
+	};
+
+	const SDL_FRect panel{
+		2.f, 2.f, 460.f, static_cast<float>(lines.size()) * 11.f + 4.f
+	};
+
+	SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_BLEND);
+	SDL_SetRenderDrawColor(state.renderer, 0, 0, 0, 170);
+	SDL_RenderFillRect(state.renderer, &panel);
+	SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_NONE);
+
+	SDL_SetRenderDrawColor(state.renderer, 235, 235, 235, 255);
+
+	float y = 6.f;
+	for (const std::string& line : lines)
+	{
+		SDL_RenderDebugText(state.renderer, 6.f, y, line.c_str());
+		y += 11.f;
+	}
 }
