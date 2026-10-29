@@ -28,12 +28,15 @@ void drawObject(const SDLState& state, const GameState& gs, GameObject& obj, flo
 void drawHealthBars(const SDLState& state, const GameState& gs, const HealthBar& bar);
 void update(const SDLState& state, GameState& gs, Resources& res, GameObject& obj, float deltaTime);
 void createTiles(const SDLState& state, GameState& gs, const Resources& res);
-void checkCollision(const SDLState& state, const Resources& res, GameObject& objA, GameObject& objB);
+void collisionResponse(const SDLState& state, const Resources& res, GameObject& objA, GameObject& objB, glm::vec2& tentativePos,
+	glm::vec2 surfaceNormal, glm::vec2& overlap, float deltaTime);
+bool intersectAABB(const SDL_FRect& a, const SDL_FRect& b, glm::vec2& outOverlap);
 void handleKeyInput(const SDLState& state, const Resources& res, GameObject& obj, SDL_Scancode key, bool keyDown);
 void drawParallaxBackground(const SDLState& state, SDL_Texture* tex, float cameraX, float scrollFactor);
 void handleMouseInput(GameState& gs, const Resources& res, GameObject& obj, uint8_t button, bool isPressed);
 void handleShooting(const SDLState& state, GameState& gs, const Resources& res, GameObject& player);
 void drawDebugOverlay(const SDLState& state, const GameState& gs, const Resources& res, const FrameStats& stats);
+
 
 int main(int argc, char* argv[])
 {
@@ -416,12 +419,6 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
 		obj.animations[obj.currentAnimation].step(deltaTime);
 	}
 
-	// add gravity
-	if (obj.gravityEnabled && !obj.grounded)
-	{
-		obj.velocity.y += GRAVITY * deltaTime;
-	}
-
 	float currentDirection = 0;
 	switch (obj.type)
 	{
@@ -563,6 +560,7 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
 
 	if (currentDirection != 0) obj.direction = currentDirection;
 
+	// physics and collision detection
 	const float maxSpeed = obj.maxSpeed.x;
 	const float targetSpeed = currentDirection * maxSpeed;
 
@@ -584,78 +582,186 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
 		else if (obj.velocity.x > targetSpeed) obj.velocity.x = std::max(obj.velocity.x - step, targetSpeed);
 	}
 
-	// add resultant velocity
-	obj.position += obj.velocity * deltaTime;
-
-	// handle collision detection for dynamic objects
-	if (obj.dynamic)
+	// add gravity
+	if (obj.gravityEnabled && !obj.grounded)
 	{
-		bool foundGround = false;
+		obj.velocity.y += GRAVITY * deltaTime;
+	}
+
+	glm::vec2 tentativePos = obj.position;
+	bool contacts[4] = { false };
+	const int RIGHT_CONTACT = 0;
+	const int LEFT_CONTACT = 1;
+	const int BOTTOM_CONTACT = 2;
+	const int TOP_CONTACT = 3;
+
+	for (int axis = 0; axis < 2; ++axis)
+	{
+		tentativePos[axis] += obj.velocity[axis] * deltaTime;
 		for (auto& layer : gs.layers)
 		{
-			for (auto& other : layer)
+			for (auto& objB : layer)
 			{
-				if (&other != &obj && other.collider.w != 0 && other.collider.h != 0)
+				if (&obj == &objB || !obj.dynamic) continue;
+				if (objB.collider.w == 0.f || objB.collider.h == 0.f) continue;
+
+				const SDL_FRect rectA{
+					.x = tentativePos.x + obj.collider.x,
+					.y = tentativePos.y + obj.collider.y,
+					.w = obj.collider.w,
+					.h = obj.collider.h
+				};
+				const SDL_FRect rectB{
+					.x = objB.position.x + objB.collider.x,
+					.y = objB.position.y + objB.collider.y,
+					.w = objB.collider.w,
+					.h = objB.collider.h
+				};
+
+				glm::vec2 overlap;
+				if (!intersectAABB(rectA, rectB, overlap)) continue;
+				if (overlap[axis] <= 0.001f) continue; // ignore sub-pixel skin contact; otherwise resting on the floor
+														// can be interpreted as a horizontal wall collision.
+				
+				glm::vec2 surfaceNormal{ 0.f };
+				if (axis == 0)
 				{
-					checkCollision(state, res, obj, other);
+					const float aCenter = rectA.x + rectA.w * 0.5f;
+					const float bCenter = rectB.x + rectB.w * 0.5f;
+					const bool aIsBeforeB = (obj.velocity.x != 0.f) ? (obj.velocity.x > 0.f) : (aCenter < bCenter);
 
-					if (obj.gravityEnabled && other.type == ObjectType::level)
+					if (aIsBeforeB)
 					{
-						SDL_FRect sensor{
-						.x = obj.position.x + obj.collider.x,
-						.y = obj.position.y + obj.collider.y + obj.collider.h,
-						.w = obj.collider.w,
-						.h = 1
-						};
-
-						SDL_FRect rectB{
-							.x = other.position.x + other.collider.x,
-							.y = other.position.y + other.collider.y,
-							.w = other.collider.w,
-							.h = other.collider.h
-						};
-
-						SDL_FRect rectC{ 0 };
-						if (SDL_GetRectIntersectionFloat(&sensor, &rectB, &rectC)
-							&& rectC.w > 0.0f && rectC.h > 0.0f)
-						{
-							foundGround = true;
-						}
+						surfaceNormal = { -1.f, 0.f };
+						contacts[RIGHT_CONTACT] = true;
+					}
+					else
+					{
+						surfaceNormal = { 1.f, 0.f };
+						contacts[LEFT_CONTACT] = true;
 					}
 				}
+				else
+				{
+					const float aCenter = rectA.y + rectA.h * 0.5f;
+					const float bCenter = rectB.y + rectB.h * 0.5f;
+					const bool aIsBeforeB = (obj.velocity.y != 0.f) ? (obj.velocity.y > 0.f) : (aCenter < bCenter);
+
+					if (aIsBeforeB)
+					{
+						surfaceNormal = { 0.f, -1.f };
+						contacts[BOTTOM_CONTACT] = true;
+					}
+					else
+					{
+						surfaceNormal = { 0.f, 1.f };
+						contacts[TOP_CONTACT] = true;
+					}
+				}
+
+				collisionResponse(state, res, obj, objB, tentativePos, surfaceNormal, overlap, deltaTime);
 			}
 		}
-		if (obj.grounded != foundGround) obj.grounded = foundGround;
-
 	}
 
-	// guard against edge case for being suspended 1px away from ground in permanent jumping state
-	if (obj.type == ObjectType::player && obj.grounded && obj.data.player.state == PlayerState::jumping && obj.velocity.y >= 0)
+	obj.position = tentativePos;
+
+	// check grounded using sensor
+	obj.grounded = false;
+	if (obj.gravityEnabled && obj.velocity.y >= 0.f)
 	{
-		obj.data.player.state = obj.direction != 0 ? PlayerState::running : PlayerState::idle;
+		const SDL_FRect sensor{
+			.x = obj.position.x + obj.collider.x,
+			.y = obj.position.y + obj.collider.y + obj.collider.h,
+			.w = obj.collider.w,
+			.h = 1.f
+		};
+
+		for (const auto& layer : gs.layers)
+		{
+			for (const auto& objB : layer)
+			{
+				if (&obj == &objB) continue;
+				if (objB.type != ObjectType::level) continue;
+				if (objB.collider.w == 0.f || objB.collider.h == 0.f) continue;
+
+				const SDL_FRect rectB{
+					.x = objB.position.x + objB.collider.x,
+					.y = objB.position.y + objB.collider.y,
+					.w = objB.collider.w,
+					.h = objB.collider.h
+				};
+
+				glm::vec2 overlap;
+				if (intersectAABB(sensor, rectB, overlap))
+				{
+					obj.grounded = true;
+					obj.velocity.y = 0.f;
+					contacts[BOTTOM_CONTACT] = true;
+					break;
+				}
+			}
+
+			if (obj.grounded) break;
+		}
 	}
+
+	if (contacts[BOTTOM_CONTACT] && !obj.contacts[BOTTOM_CONTACT])
+	{
+		// landed event
+		if (obj.type == ObjectType::player)
+		{
+			obj.data.player.state = obj.direction != 0 ? PlayerState::running : PlayerState::idle;
+		}
+	}
+	else if (obj.contacts[BOTTOM_CONTACT] && !contacts[BOTTOM_CONTACT])
+	{
+		// in air event
+	}
+
+	// update object's contacts
+	for (int i = 0; i < 4; i++) obj.contacts[i] = contacts[i];
 }
 
-void collisionResponse(const SDLState& state, const Resources& res, GameObject& objA, GameObject& objB, const SDL_FRect& rectC)
+bool intersectAABB(const SDL_FRect& a, const SDL_FRect& b, glm::vec2& outOverlap)
 {
-	const auto genericResponse = [&]() {
-			if (rectC.h < rectC.w) // vertical collision
-			{
-				const float aCenterY = objA.position.y + objA.collider.y + objA.collider.h * 0.5f;
-				const float bCenterY = objB.position.y + objB.collider.y + objB.collider.h * 0.5f;
-				objA.position.y += aCenterY < bCenterY ? -rectC.h : rectC.h; // going down : going up
+	const float minXA = a.x;
+	const float maxXA = a.x + a.w;
+	const float minYA = a.y;
+	const float maxYA = a.y + a.h;
 
-				objA.velocity.y = 0;
-			}
-			else // horizontal collision
-			{
-				const float aCenterX = objA.position.x + objA.collider.x + objA.collider.w * 0.5f;
-				const float bCenterX = objB.position.x + objB.collider.x + objB.collider.w * 0.5f;
-				objA.position.x += aCenterX < bCenterX ? -rectC.w : rectC.w; // going right : going left
+	const float minXB = b.x;
+	const float maxXB = b.x + b.w;
+	const float minYB = b.y;
+	const float maxYB = b.y + b.h;
 
-				objA.velocity.x = 0;
-			}
-		};
+	if (minXA < maxXB && minXB < maxXA && minYA < maxYB && minYB < maxYA)
+	{
+		outOverlap.x = std::min(maxXA, maxXB) - std::max(minXA, minXB);
+		outOverlap.y = std::min(maxYA, maxYB) - std::max(minYA, minYB);
+		return true;
+	}
+
+	return false;
+}
+
+void collisionResponse(const SDLState& state, const Resources& res, GameObject& objA, GameObject& objB, glm::vec2& tentativePos, 
+	glm::vec2 surfaceNormal, glm::vec2& overlap, float deltaTime)
+{
+	auto resolveCollision = [&]() {
+		tentativePos += surfaceNormal * overlap;
+	};
+
+	auto clearVelocity = [&]() {
+		if (surfaceNormal.x != 0)
+		{
+			objA.velocity.x = 0;
+		}
+		else if (surfaceNormal.y != 0)
+		{
+			objA.velocity.y = 0;
+		}
+	};
 
 	switch (objA.type)
 	{
@@ -665,14 +771,17 @@ void collisionResponse(const SDLState& state, const Resources& res, GameObject& 
 			{
 				case ObjectType::level:
 				{
-					genericResponse();
+					clearVelocity();
+					resolveCollision();
 					break;
 				}
 				case ObjectType::enemy:
 				{
 					if (objB.data.enemy.isDead) break;
 
-					genericResponse();
+					clearVelocity();
+					resolveCollision();
+
 					if (objA.data.player.hitTimer.isTimeout())
 					{
 						objA.data.player.hitTimer.reset();
@@ -733,10 +842,11 @@ void collisionResponse(const SDLState& state, const Resources& res, GameObject& 
 
 					if (!passThrough)
 					{
-						genericResponse();
-						objA.velocity *= 0;
+						objA.dynamic = false;
 						objA.data.bullet.state = BulletState::colliding;
 						objA.playAnimation(res.ANIM_BULLET_HIT);
+						clearVelocity();
+						resolveCollision();
 					}
 					break;
 				}
@@ -749,37 +859,14 @@ void collisionResponse(const SDLState& state, const Resources& res, GameObject& 
 			{
 				case ObjectType::level:
 				{
-					genericResponse();
+					clearVelocity();
+					resolveCollision(); 
 					break;
 				}
 			}
 			break;
 		}
 
-	}
-}
-
-void checkCollision(const SDLState& state, const Resources& res, GameObject& objA, GameObject& objB)
-{
-	SDL_FRect rectA{
-		.x = objA.position.x + objA.collider.x,
-		.y = objA.position.y + objA.collider.y,
-		.w = objA.collider.w,
-		.h = objA.collider.h
-	};
-
-	SDL_FRect rectB{
-		.x = objB.position.x + objB.collider.x,
-		.y = objB.position.y + objB.collider.y,
-		.w = objB.collider.w,
-		.h = objB.collider.h
-	};
-
-	SDL_FRect rectC{ 0 };
-
-	if (SDL_GetRectIntersectionFloat(&rectA, &rectB, &rectC))
-	{
-		collisionResponse(state, res, objA, objB, rectC);
 	}
 }
 

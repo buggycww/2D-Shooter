@@ -87,6 +87,7 @@ struct GameObject
 	bool gravityEnabled = false;
 	bool grounded = false;
 	SDL_FRect collider;
+	bool contacts[4] = { false };
 
 	std::vector<Animation> animations;
 	int currentAnimation;
