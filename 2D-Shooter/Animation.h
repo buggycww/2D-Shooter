@@ -35,10 +35,20 @@ struct Animation
 		const int frame = static_cast<int>(timer.getTime() / timer.getLength() * frameCount);
 		return std::min(frame, frameCount - 1); // timer can overshoot by more than one frame
 	}
+	float normalisedTime() const
+	{
+		const float length = timer.getLength();
+		return length > 0.f ? timer.getTime() / length : 0.f;
+	}
 
 	void step(float deltaTime)
 	{
 		timer.step(deltaTime);
+	}
+
+	void setNormalisedTime(float phase)
+	{
+		timer.setTime(std::clamp(phase, 0.f, 1.f) * timer.getLength());
 	}
 
 	bool isDone() const { return timer.isTimeout(); }

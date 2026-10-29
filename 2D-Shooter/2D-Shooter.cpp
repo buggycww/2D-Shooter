@@ -310,37 +310,41 @@ void cleanupSDL(SDLState& state)
 
 void drawObject(const SDLState& state, const GameState& gs, GameObject& obj, float deltaTime)
 {
+	const SpriteSheet* sheet = obj.currentAnimation != -1
+		? obj.animations[obj.currentAnimation].spriteSheet
+		: obj.getSpriteSheet();
+
 	float frameX = obj.currentAnimation != -1 
 		? obj.animations[obj.currentAnimation].currentFrame()
 		: obj.spriteFrame - 1;
 
 	SDL_FRect srcRect
 	{
-		.x = frameX * obj.sprite->frameWidth,
+		.x = frameX * sheet->frameWidth,
 		.y = 0,
-		.w = static_cast<float>(obj.sprite->frameWidth),
-		.h = static_cast<float>(obj.sprite->frameHeight)
+		.w = static_cast<float>(sheet->frameWidth),
+		.h = static_cast<float>(sheet->frameHeight)
 	};
 
 	SDL_FRect dstRect
 	{                                
 		.x = obj.position.x - gs.mapViewport.x,
 		.y = obj.position.y - gs.mapViewport.y,
-		.w = static_cast<float>(obj.sprite->frameWidth),
-		.h = static_cast<float>(obj.sprite->frameHeight)
+		.w = static_cast<float>(sheet->frameWidth),
+		.h = static_cast<float>(sheet->frameHeight)
 	};
 
 	SDL_FlipMode flipMode = obj.direction == -1 ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
 	if (!obj.shouldFlash) 
 	{
-		SDL_RenderTextureRotated(state.renderer, obj.sprite->texture, &srcRect, &dstRect, 0, nullptr, flipMode);
+		SDL_RenderTextureRotated(state.renderer, sheet->texture, &srcRect, &dstRect, 0, nullptr, flipMode);
 	}
 	else
 	{
 		// flash
-		SDL_SetTextureColorModFloat(obj.sprite->texture, 2.5f, 1.f, 1.f);
-		SDL_RenderTextureRotated(state.renderer, obj.sprite->texture, &srcRect, &dstRect, 0, nullptr, flipMode);
-		SDL_SetTextureColorModFloat(obj.sprite->texture, 1.f, 1.f, 1.f);
+		SDL_SetTextureColorModFloat(sheet->texture, 2.5f, 1.f, 1.f);
+		SDL_RenderTextureRotated(state.renderer, sheet->texture, &srcRect, &dstRect, 0, nullptr, flipMode);
+		SDL_SetTextureColorModFloat(sheet->texture, 1.f, 1.f, 1.f);
 
 		obj.flashTimer.step(deltaTime);
 		if (obj.flashTimer.isTimeout()) obj.shouldFlash = false;
@@ -372,14 +376,14 @@ void drawHealthBars(const SDLState& state, const GameState& gs, const HealthBar&
 
 			const CharacterData* character = &obj.data.enemy;
 
-			if (!character || !obj.sprite || character->isDead) continue;
+			if (!character || !obj.getSpriteSheet() || character->isDead) continue;
 
 			const glm::vec2 topLeft{
 				obj.position.x - gs.mapViewport.x,
 				obj.position.y - gs.mapViewport.y
 			};
 
-			bar.Draw(state.renderer, character->health, character->maxHealth, topLeft, static_cast<float>(obj.sprite->frameWidth));
+			bar.Draw(state.renderer, character->health, character->maxHealth, topLeft, static_cast<float>(obj.getSpriteSheet()->frameWidth));
 		}
 	}
 }
@@ -448,8 +452,7 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
 						obj.data.player.state = PlayerState::running;
 					}
 
-					obj.currentAnimation = obj.data.player.isShooting ? res.ANIM_PLAYER_SHOOT : res.ANIM_PLAYER_IDLE;
-					obj.sprite = obj.animations[obj.currentAnimation].spriteSheet;
+					obj.playAnimation(obj.data.player.isShooting ? res.ANIM_PLAYER_SHOOT : res.ANIM_PLAYER_IDLE);
 					break;
 				}
 				case PlayerState::running:
@@ -462,21 +465,19 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
 					
 					if (obj.velocity.x * obj.direction < 0 && obj.grounded)
 					{
-						obj.currentAnimation = obj.data.player.isShooting ? res.ANIM_PLAYER_SHOOTSLIDE : res.ANIM_PLAYER_SLIDE;
-						obj.sprite = obj.animations[obj.currentAnimation].spriteSheet;
+						obj.playAnimation(obj.data.player.isShooting ? res.ANIM_PLAYER_SHOOTSLIDE : res.ANIM_PLAYER_SLIDE);
 					}
 					else
 					{
-						obj.currentAnimation = res.ANIM_PLAYER_RUN; // use same index to keep run cycle consistent
-						obj.sprite = obj.animations[obj.currentAnimation].spriteSheet;
+						// preserve run cycle phase
+						obj.playAnimation( obj.data.player.isShooting ? res.ANIM_PLAYER_SHOOTRUN : res.ANIM_PLAYER_RUN, true);
 					}
 
 					break;
 				}
 				case PlayerState::jumping:
 				{
-					obj.currentAnimation = res.ANIM_PLAYER_RUN;
-					obj.sprite = obj.animations[obj.currentAnimation].spriteSheet;
+					obj.playAnimation(res.ANIM_PLAYER_RUN);
 					break;
 				}
 			}
@@ -540,8 +541,7 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
 					if (obj.data.enemy.hitTimer.isTimeout())
 					{
 						obj.data.enemy.state = EnemyState::idle;
-						obj.currentAnimation = res.ANIM_ENEMY_IDLE;
-						obj.sprite = obj.animations[obj.currentAnimation].spriteSheet;
+						obj.playAnimation(res.ANIM_ENEMY_IDLE);
 					}
 					break;
 				}
@@ -719,15 +719,13 @@ void collisionResponse(const SDLState& state, const Resources& res, GameObject& 
 							if (objB.data.enemy.isDead)
 							{
 								objB.data.enemy.state = EnemyState::dead;
-								objB.currentAnimation = res.ANIM_ENEMY_DIE;
-								objB.sprite = objB.animations[objB.currentAnimation].spriteSheet;
+								objB.playAnimation(res.ANIM_ENEMY_DIE);
 								MIX_PlayAudio(state.mixer, res.audioEnemyDie);
 							}
 							else
 							{
 								objB.data.enemy.state = EnemyState::hit;
-								objB.currentAnimation = res.ANIM_ENEMY_HIT;
-								objB.sprite = objB.animations[objB.currentAnimation].spriteSheet;
+								objB.playAnimation(res.ANIM_ENEMY_HIT);
 							}
 							break;
 						}
@@ -738,8 +736,7 @@ void collisionResponse(const SDLState& state, const Resources& res, GameObject& 
 						genericResponse();
 						objA.velocity *= 0;
 						objA.data.bullet.state = BulletState::colliding;
-						objA.currentAnimation = res.ANIM_BULLET_HIT;
-						objA.sprite = objA.animations[objA.currentAnimation].spriteSheet;
+						objA.playAnimation(res.ANIM_BULLET_HIT);
 					}
 					break;
 				}

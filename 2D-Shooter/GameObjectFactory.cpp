@@ -6,9 +6,8 @@
 
 GameObject GameObjectFactory::makeTile(glm::vec2 position, const SpriteSheet* sheet, bool solid) const
 {
-    GameObject o;
+    GameObject o(sheet);
     o.type = ObjectType::level;
-    o.sprite = sheet;
     o.position = position;
 
     const float w = solid ? static_cast<float>(res.map->tileWidth) : 0.f;
@@ -19,7 +18,7 @@ GameObject GameObjectFactory::makeTile(glm::vec2 position, const SpriteSheet* sh
 
 GameObject GameObjectFactory::makePlayer(glm::vec2 position) const
 {
-    GameObject o;
+    GameObject o(res.playerAnims[res.ANIM_PLAYER_IDLE].spriteSheet);
     o.type = ObjectType::player;
     o.data.player = PlayerData();
     o.animations = res.playerAnims;
@@ -35,7 +34,7 @@ GameObject GameObjectFactory::makePlayer(glm::vec2 position) const
 
 GameObject GameObjectFactory::makeEnemy(glm::vec2 position) const
 {
-    GameObject o;
+    GameObject o(res.enemyAnims[res.ANIM_ENEMY_IDLE].spriteSheet);
     o.type = ObjectType::enemy;
     o.data.enemy = EnemyData();
     o.animations = res.enemyAnims;
@@ -50,7 +49,7 @@ GameObject GameObjectFactory::makeEnemy(glm::vec2 position) const
 
 GameObject GameObjectFactory::makeBullet(glm::vec2 position, float direction, glm::vec2 velocity) const
 {
-    GameObject o;
+    GameObject o(res.bulletAnims[res.ANIM_BULLET].spriteSheet);
     o.type = ObjectType::bullet;
     o.data.bullet = BulletData();
     o.animations = res.bulletAnims;
@@ -61,8 +60,8 @@ GameObject GameObjectFactory::makeBullet(glm::vec2 position, float direction, gl
     o.maxSpeed = glm::vec2(1000.f, 0.f);
     o.collider = {
         .x = 0.f, .y = 0.f,
-        .w = static_cast<float>(o.sprite->frameWidth),
-        .h = static_cast<float>(o.sprite->frameHeight)
+        .w = static_cast<float>(o.getSpriteSheet()->frameWidth),
+        .h = static_cast<float>(o.getSpriteSheet()->frameHeight)
     };
     o.dynamic = true;
     return o;
@@ -80,12 +79,13 @@ void GameObjectFactory::resetBullet(GameObject& b, glm::vec2 position, float dir
     b.maxSpeed = glm::vec2(1000.f, 0.f);
     b.dynamic = true;
     b.grounded = false;
-    b.playAnimation(res.ANIM_BULLET);
+    b.animations[res.ANIM_BULLET_HIT].reset();
+    b.playAnimation(res.ANIM_BULLET, false, true); // restart
     b.spriteFrame = 1;
     b.collider = {
         .x = 0.f, .y = 0.f,
-        .w = static_cast<float>(b.sprite->frameWidth),
-        .h = static_cast<float>(b.sprite->frameHeight)
+        .w = static_cast<float>(b.getSpriteSheet()->frameWidth),
+        .h = static_cast<float>(b.getSpriteSheet()->frameHeight)
     };
     b.shouldFlash = false;
     b.flashTimer.reset();

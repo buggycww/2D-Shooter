@@ -6,6 +6,7 @@
 #include <SDL3/SDL.h>
 #include "GlobalConstants.h"
 #include "HealthBar.h"
+#include <iostream>
 
 enum class ObjectType
 {
@@ -89,13 +90,12 @@ struct GameObject
 
 	std::vector<Animation> animations;
 	int currentAnimation;
-	const SpriteSheet* sprite = nullptr;
 	int spriteFrame;
 
 	Timer flashTimer;
 	bool shouldFlash = false;
 
-	GameObject() : data{.level = LevelData()}, flashTimer(0.1f)
+	GameObject(const SpriteSheet* sprite) : data{.level = LevelData()}, flashTimer(0.1f), sprite(sprite)
 	{
 		type = ObjectType::level;
 		direction = 1;
@@ -106,10 +106,28 @@ struct GameObject
 		spriteFrame = 1;
 	}
 
-	void playAnimation(int index)
+	const SpriteSheet* getSpriteSheet() const
 	{
-		currentAnimation = index;
-		sprite = animations[index].spriteSheet;
-		animations[index].reset();
+		return currentAnimation != -1 ? animations[currentAnimation].spriteSheet : sprite;
 	}
+
+	void playAnimation(int index, bool preservePhase = false, bool restart = false)
+	{
+		if (index < 0 || index >= static_cast<int>(animations.size()))
+			return;
+
+		// if already playing this clip: do not reset it every frame
+		if (index == currentAnimation && !restart)
+			return;
+
+		float phase = 0.f;
+		if (preservePhase && currentAnimation >= 0 && !restart)
+			phase = animations[currentAnimation].normalisedTime();
+		
+		currentAnimation = index;
+		animations[index].setNormalisedTime(phase);
+	}
+
+private:
+	const SpriteSheet* sprite = nullptr;
 };

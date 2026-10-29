@@ -19,6 +19,12 @@ public:
 		}
 	}
 
+	void setTime(float t)
+	{
+		time = t;
+		timeout = false;
+	}
+
 	bool isTimeout() const { return timeout; }
 	float getTime() const { return time; }
 	float getLength() const { return length; }
