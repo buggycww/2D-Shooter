@@ -9,6 +9,7 @@
 #include <glm/glm.hpp>
 
 #include "GameObject.h"
+#include "collision detection/CollisionWorld.h"
 
 struct SDLState
 {
@@ -27,11 +28,23 @@ struct SDLState
 	}
 };
 
+struct ObjectRef
+{
+	int layer = -1;
+	int index = -1;
+};
+
 struct GameState
 {
 	std::vector<std::vector<GameObject>> layers;
 	std::vector<GameObject> bullets;
 	int playerLayer, playerIndex;
+
+	// Broad phase for the static level tiles, built once after createTiles().
+	CollisionWorld collision;
+
+	// Player / enemies, so collision does not have to walk every tile.
+	std::vector<ObjectRef> actors;
 
 	SDL_FRect mapViewport;
 	glm::vec2 maxViewportPos;
@@ -61,5 +74,21 @@ struct GameState
 	{
 		assert(hasPlayer());
 		return layers[playerLayer][playerIndex];
+	}
+
+	// Call once after all layers have been created. Static tiles go into the
+	// quadtree; moving objects are cached so the update loop can skip tiles.
+	void buildCollision()
+	{
+		collision.build(layers);
+
+		actors.clear();
+		for (int l = 0; l < static_cast<int>(layers.size()); ++l)
+		{
+			for (int i = 0; i < static_cast<int>(layers[l].size()); ++i)
+			{
+				if (layers[l][i].dynamic) actors.push_back({ l, i });
+			}
+		}
 	}
 };

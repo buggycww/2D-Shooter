@@ -30,7 +30,9 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
 void createTiles(const SDLState& state, GameState& gs, const Resources& res);
 void collisionResponse(const SDLState& state, const Resources& res, GameObject& objA, GameObject& objB, glm::vec2& tentativePos,
 	glm::vec2 surfaceNormal, glm::vec2& overlap, float deltaTime);
-bool intersectAABB(const SDL_FRect& a, const SDL_FRect& b, glm::vec2& outOverlap);
+void applyEnemyContact(const SDLState& state, const Resources& res, GameObject& player, const GameObject& enemy);
+bool intersectAABB(const AABB& a, const AABB& b, glm::vec2& outOverlap);
+AABB colliderBounds(const GameObject& obj, const glm::vec2& position);
 void handleKeyInput(const SDLState& state, const Resources& res, GameObject& obj, SDL_Scancode key, bool keyDown);
 void drawParallaxBackground(const SDLState& state, SDL_Texture* tex, float cameraX, float scrollFactor);
 void handleMouseInput(GameState& gs, const Resources& res, GameObject& obj, uint8_t button, bool isPressed);
@@ -64,6 +66,7 @@ int main(int argc, char* argv[])
 	// setup game data
 	GameState gs(state);
 	createTiles(state, gs, res);
+	gs.buildCollision();
 
 	if (!gs.hasPlayer())
 	{
@@ -474,6 +477,13 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
 				}
 				case PlayerState::jumping:
 				{
+					// Recover if a landing edge was missed while being pushed
+					// around, so the player cannot get stuck unable to jump.
+					if (obj.grounded)
+					{
+						obj.data.player.state = currentDirection != 0 ? PlayerState::running : PlayerState::idle;
+					}
+
 					obj.playAnimation(res.ANIM_PLAYER_RUN);
 					break;
 				}
@@ -595,73 +605,90 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
 	const int BOTTOM_CONTACT = 2;
 	const int TOP_CONTACT = 3;
 
+	// Reused by the level queries below. Dynamic objects are few, so they are
+	// still tested directly rather than rebuilding a quadtree every frame.
+	std::vector<GameObject*> levelCandidates;
+
 	for (int axis = 0; axis < 2; ++axis)
 	{
 		tentativePos[axis] += obj.velocity[axis] * deltaTime;
-		for (auto& layer : gs.layers)
+
+		auto resolveAgainst = [&](GameObject& objB)
 		{
-			for (auto& objB : layer)
+			if (&obj == &objB) return;
+			if (objB.collider.w == 0.f || objB.collider.h == 0.f) return;
+
+			const AABB boundsA = colliderBounds(obj, tentativePos);
+			const AABB boundsB = colliderBounds(objB, objB.position);
+
+			glm::vec2 overlap;
+			if (!intersectAABB(boundsA, boundsB, overlap)) return;
+
+			// Player/enemy collisions resolve on the axis of least penetration.
+			// Without this, a player squeezed between a wall and an enemy has
+			// their horizontal overlap still present on the vertical pass, and
+			// gets pushed up/down by the enemy's full height every frame.
+			//
+			// Bullets keep the movement-axis rule: they are much smaller than a
+			// tile and fast enough that the shallowest axis could pop them out
+			// of the top or bottom of a wall instead of stopping them.
+			if (obj.type != ObjectType::bullet)
 			{
-				if (&obj == &objB || !obj.dynamic) continue;
-				if (objB.collider.w == 0.f || objB.collider.h == 0.f) continue;
+				const int penetrationAxis = (overlap.x < overlap.y) ? 0 : 1;
+				if (penetrationAxis != axis) return;
+			}
 
-				const SDL_FRect rectA{
-					.x = tentativePos.x + obj.collider.x,
-					.y = tentativePos.y + obj.collider.y,
-					.w = obj.collider.w,
-					.h = obj.collider.h
-				};
-				const SDL_FRect rectB{
-					.x = objB.position.x + objB.collider.x,
-					.y = objB.position.y + objB.collider.y,
-					.w = objB.collider.w,
-					.h = objB.collider.h
-				};
+			glm::vec2 surfaceNormal{ 0.f };
+			if (axis == 0)
+			{
+				const float aCenter = boundsA.x + boundsA.w * 0.5f;
+				const float bCenter = boundsB.x + boundsB.w * 0.5f;
+				const bool aIsBeforeB = (obj.velocity.x != 0.f) ? (obj.velocity.x > 0.f) : (aCenter < bCenter);
 
-				glm::vec2 overlap;
-				if (!intersectAABB(rectA, rectB, overlap)) continue;
-				if (overlap[axis] <= 0.001f) continue; // ignore sub-pixel skin contact; otherwise resting on the floor
-														// can be interpreted as a horizontal wall collision.
-				
-				glm::vec2 surfaceNormal{ 0.f };
-				if (axis == 0)
+				if (aIsBeforeB)
 				{
-					const float aCenter = rectA.x + rectA.w * 0.5f;
-					const float bCenter = rectB.x + rectB.w * 0.5f;
-					const bool aIsBeforeB = (obj.velocity.x != 0.f) ? (obj.velocity.x > 0.f) : (aCenter < bCenter);
-
-					if (aIsBeforeB)
-					{
-						surfaceNormal = { -1.f, 0.f };
-						contacts[RIGHT_CONTACT] = true;
-					}
-					else
-					{
-						surfaceNormal = { 1.f, 0.f };
-						contacts[LEFT_CONTACT] = true;
-					}
+					surfaceNormal = { -1.f, 0.f };
+					contacts[RIGHT_CONTACT] = true;
 				}
 				else
 				{
-					const float aCenter = rectA.y + rectA.h * 0.5f;
-					const float bCenter = rectB.y + rectB.h * 0.5f;
-					const bool aIsBeforeB = (obj.velocity.y != 0.f) ? (obj.velocity.y > 0.f) : (aCenter < bCenter);
-
-					if (aIsBeforeB)
-					{
-						surfaceNormal = { 0.f, -1.f };
-						contacts[BOTTOM_CONTACT] = true;
-					}
-					else
-					{
-						surfaceNormal = { 0.f, 1.f };
-						contacts[TOP_CONTACT] = true;
-					}
+					surfaceNormal = { 1.f, 0.f };
+					contacts[LEFT_CONTACT] = true;
 				}
-
-				collisionResponse(state, res, obj, objB, tentativePos, surfaceNormal, overlap, deltaTime);
 			}
+			else
+			{
+				const float aCenter = boundsA.y + boundsA.h * 0.5f;
+				const float bCenter = boundsB.y + boundsB.h * 0.5f;
+				const bool aIsBeforeB = (obj.velocity.y != 0.f) ? (obj.velocity.y > 0.f) : (aCenter < bCenter);
+
+				if (aIsBeforeB)
+				{
+					surfaceNormal = { 0.f, -1.f };
+					contacts[BOTTOM_CONTACT] = true;
+				}
+				else
+				{
+					surfaceNormal = { 0.f, 1.f };
+					contacts[TOP_CONTACT] = true;
+				}
+			}
+
+			collisionResponse(state, res, obj, objB, tentativePos, surfaceNormal, overlap, deltaTime);
+		};
+
+		// Resolve against actors first, then re-query the level at the new
+		// position. Static geometry is resolved last so it always overrides.
+		// actor would otherwise push into a wall.
+		for (const ObjectRef& ref : gs.actors)
+		{
+			GameObject& objB = gs.layers[ref.layer][ref.index];
+			if (objB.dynamic) resolveAgainst(objB);
 		}
+
+		levelCandidates.clear();
+		gs.collision.query(colliderBounds(obj, tentativePos), levelCandidates);
+		for (GameObject* objB : levelCandidates) resolveAgainst(*objB);
 	}
 
 	obj.position = tentativePos;
@@ -670,39 +697,21 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
 	obj.grounded = false;
 	if (obj.gravityEnabled && obj.velocity.y >= 0.f)
 	{
-		const SDL_FRect sensor{
-			.x = obj.position.x + obj.collider.x,
-			.y = obj.position.y + obj.collider.y + obj.collider.h,
-			.w = obj.collider.w,
-			.h = 1.f
+		const AABB sensor{
+			obj.position.x + obj.collider.x,
+			obj.position.y + obj.collider.y + obj.collider.h,
+			obj.collider.w,
+			1.f
 		};
 
-		for (const auto& layer : gs.layers)
+		levelCandidates.clear();
+		gs.collision.query(sensor, levelCandidates);
+
+		if (!levelCandidates.empty())
 		{
-			for (const auto& objB : layer)
-			{
-				if (&obj == &objB) continue;
-				if (objB.type != ObjectType::level) continue;
-				if (objB.collider.w == 0.f || objB.collider.h == 0.f) continue;
-
-				const SDL_FRect rectB{
-					.x = objB.position.x + objB.collider.x,
-					.y = objB.position.y + objB.collider.y,
-					.w = objB.collider.w,
-					.h = objB.collider.h
-				};
-
-				glm::vec2 overlap;
-				if (intersectAABB(sensor, rectB, overlap))
-				{
-					obj.grounded = true;
-					obj.velocity.y = 0.f;
-					contacts[BOTTOM_CONTACT] = true;
-					break;
-				}
-			}
-
-			if (obj.grounded) break;
+			obj.grounded = true;
+			obj.velocity.y = 0.f;
+			contacts[BOTTOM_CONTACT] = true;
 		}
 	}
 
@@ -723,17 +732,27 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
 	for (int i = 0; i < 4; i++) obj.contacts[i] = contacts[i];
 }
 
-bool intersectAABB(const SDL_FRect& a, const SDL_FRect& b, glm::vec2& outOverlap)
+AABB colliderBounds(const GameObject& obj, const glm::vec2& position)
 {
-	const float minXA = a.x;
-	const float maxXA = a.x + a.w;
-	const float minYA = a.y;
-	const float maxYA = a.y + a.h;
+	return {
+		position.x + obj.collider.x,
+		position.y + obj.collider.y,
+		obj.collider.w,
+		obj.collider.h
+	};
+}
 
-	const float minXB = b.x;
-	const float maxXB = b.x + b.w;
-	const float minYB = b.y;
-	const float maxYB = b.y + b.h;
+bool intersectAABB(const AABB& a, const AABB& b, glm::vec2& outOverlap)
+{
+	const float minXA = a.left();
+	const float maxXA = a.right();
+	const float minYA = a.top();
+	const float maxYA = a.bottom();
+
+	const float minXB = b.left();
+	const float maxXB = b.right();
+	const float minYB = b.top();
+	const float maxYB = b.bottom();
 
 	if (minXA < maxXB && minXB < maxXA && minYA < maxYB && minYB < maxYA)
 	{
@@ -743,6 +762,22 @@ bool intersectAABB(const SDL_FRect& a, const SDL_FRect& b, glm::vec2& outOverlap
 	}
 
 	return false;
+}
+
+void applyEnemyContact(const SDLState& state, const Resources& res, GameObject& player, const GameObject& enemy)
+{
+	if (player.data.player.isDead) return;
+
+	if (player.data.player.hitTimer.isTimeout())
+	{
+		player.data.player.hitTimer.reset();
+		const float direction = player.position.x < enemy.position.x ? -1.f : 1.f;
+		player.velocity.x += direction * KNOCKBACK;
+		MIX_PlayAudio(state.mixer, res.audioEnemyHit);
+	}
+
+	player.shouldFlash = true;
+	player.flashTimer.reset();
 }
 
 void collisionResponse(const SDLState& state, const Resources& res, GameObject& objA, GameObject& objB, glm::vec2& tentativePos, 
@@ -781,17 +816,7 @@ void collisionResponse(const SDLState& state, const Resources& res, GameObject& 
 
 					clearVelocity();
 					resolveCollision();
-
-					if (objA.data.player.hitTimer.isTimeout())
-					{
-						objA.data.player.hitTimer.reset();
-						float direction = objA.position.x < objB.position.x ? -1 : 1;
-						objA.velocity.x += direction * KNOCKBACK;
-						MIX_PlayAudio(state.mixer, res.audioEnemyHit);
-					}
-
-					objA.shouldFlash = true;
-					objA.flashTimer.reset();
+					applyEnemyContact(state, res, objA, objB);
 					break;
 				}
 			}
@@ -806,6 +831,12 @@ void collisionResponse(const SDLState& state, const Resources& res, GameObject& 
 					bool passThrough = false;
 					switch (objB.type)
 					{
+						case ObjectType::player:
+						{
+							// bullets must not collide with the shooter
+							passThrough = true;
+							break;
+						}
 						case ObjectType::level:
 						{
 							MIX_PlayAudio(state.mixer, res.audioShootHit);
@@ -855,12 +886,23 @@ void collisionResponse(const SDLState& state, const Resources& res, GameObject& 
 		}
 		case ObjectType::enemy:
 		{
+			if (objA.data.enemy.isDead) break;
 			switch (objB.type)
 			{
 				case ObjectType::level:
 				{
 					clearVelocity();
 					resolveCollision(); 
+					break;
+				}
+				case ObjectType::player:
+				{
+					// keep the enemy from burrowing into the player
+					if (objB.data.player.isDead) break;
+
+					clearVelocity();
+					resolveCollision();
+					applyEnemyContact(state, res, objB, objA);
 					break;
 				}
 			}
@@ -951,31 +993,16 @@ void createTiles(const SDLState& state, GameState& gs, const Resources& res)
 
 void handleKeyInput(const SDLState& state, const Resources& res, GameObject& obj, SDL_Scancode key, bool keyDown)
 {
-	if (obj.type == ObjectType::player)
+	if (obj.type != ObjectType::player) return;
+
+	// Allow a jump whenever the player is actually on the ground, regardless
+	// of the current state. This also recovers from a missed landing edge.
+	if (key == SDL_SCANCODE_SPACE && keyDown && obj.grounded)
 	{
-		switch (obj.data.player.state)
-		{
-			case PlayerState::idle:
-			{
-				if (key == SDL_SCANCODE_SPACE && keyDown && obj.grounded)
-				{
-					MIX_PlayAudio(state.mixer, res.audioJump);
-					obj.data.player.state = PlayerState::jumping;
-					obj.velocity.y = JUMP_FORCE;
-				}
-				break;
-			}
-			case PlayerState::running:
-			{
-				if (key == SDL_SCANCODE_SPACE && keyDown && obj.grounded)
-				{
-					MIX_PlayAudio(state.mixer, res.audioJump);
-					obj.data.player.state = PlayerState::jumping;
-					obj.velocity.y = JUMP_FORCE;
-				}
-				break;
-			}
-		}
+		MIX_PlayAudio(state.mixer, res.audioJump);
+		obj.data.player.state = PlayerState::jumping;
+		obj.grounded = false;
+		obj.velocity.y = JUMP_FORCE;
 	}
 }
 
@@ -992,13 +1019,43 @@ void handleShooting(const SDLState& state, GameState& gs, const Resources& res, 
 	if (!player.data.player.isShooting) return;
 	if (!player.data.player.shootTimer.isTimeout()) return;
 
-	player.data.player.shootTimer.reset();
-
 	const float xPos = player.direction > 0
 		? player.position.x + static_cast<float>(TILE_SIZE) - 8.f
 		: player.position.x;
 
-	const glm::vec2 spawnPos(xPos, player.position.y + static_cast<float>(TILE_SIZE) * 0.5f);
+	glm::vec2 spawnPos(xPos, player.position.y + static_cast<float>(TILE_SIZE) * 0.5f);
+
+	const SpriteSheet* bulletSheet = res.bulletAnims[res.ANIM_BULLET].spriteSheet;
+	const float bulletW = bulletSheet ? static_cast<float>(bulletSheet->frameWidth) : 4.f;
+	const float bulletH = bulletSheet ? static_cast<float>(bulletSheet->frameHeight) : 4.f;
+
+	AABB spawnBounds{ spawnPos.x, spawnPos.y, bulletW, bulletH };
+
+	// If the muzzle is buried in a wall, pull the spawn point back toward the
+	// player until the bullet is clear. If there is no room at all, skip the
+	// shot rather than creating a bullet inside the level.
+	if (gs.collision.overlaps(spawnBounds))
+	{
+		std::vector<GameObject*> blockers;
+		gs.collision.query(spawnBounds, blockers);
+
+		float pullBack = 0.f;
+		for (const GameObject* block : blockers)
+		{
+			const AABB blockBounds = colliderBounds(*block, block->position);
+			pullBack = std::max(pullBack, player.direction > 0.f
+				? spawnBounds.right() - blockBounds.left()
+				: blockBounds.right() - spawnBounds.left());
+		}
+
+		spawnPos.x -= player.direction * (pullBack + 0.01f);
+		spawnBounds = { spawnPos.x, spawnPos.y, bulletW, bulletH };
+
+		if (gs.collision.overlaps(spawnBounds))
+			return;
+	}
+
+	player.data.player.shootTimer.reset();
 
 	const int yVariation = 40;
 	const float yVelocity = static_cast<float>(SDL_rand(yVariation) - yVariation / 2);
@@ -1049,7 +1106,7 @@ void drawDebugOverlay(const SDLState& state, const GameState& gs, const Resource
 	const char* stateName =
 		(stateIndex >= 0 && stateIndex < 3) ? stateNames[stateIndex] : "?";
 
-	const std::array<std::string, 6> lines{
+	const std::array<std::string, 7> lines{
 		std::format("FPS {:6.1f}   frame {:6.2f} ms   worst {:6.2f} ms",
 			stats.fps, stats.frameMs, stats.worstFrameMs),
 		std::format("update {:5.2f} ms   draw {:5.2f} ms",
@@ -1062,6 +1119,8 @@ void drawDebugOverlay(const SDLState& state, const GameState& gs, const Resource
 			player.data.player.health, player.data.player.maxHealth),
 		std::format("bullets {}/{}   enemies {}   objects {}",
 			activeBullets, gs.bullets.size(), enemies, objects),
+		std::format("quadtree {} nodes / {} boxes",
+			gs.collision.nodeCount(), gs.collision.entryCount()),
 		std::format("camera ({:.1f},{:.1f})   map {}x{}",
 			gs.mapViewport.x, gs.mapViewport.y,
 			res.map->mapWidth, res.map->mapHeight)

@@ -8,7 +8,7 @@ find_package(SDL3_mixer REQUIRED)
 find_package(tinyxml2 REQUIRED)
 
 # Add source to this project's executable.
-add_executable (2D-Shooter "2D-Shooter.cpp" "2D-Shooter.h" "AssetPaths.h" "GameObject.h" "Timer.h" "Animation.h"  "GlobalConstants.h" "Resources.h" "Resources.cpp" "GameStates.h" "tmx.h" "tmx.cpp" "HealthBar.h" "GameObjectFactory.h" "GameObjectFactory.cpp"  "ProfilingStats.h")
+add_executable (2D-Shooter "2D-Shooter.cpp" "2D-Shooter.h" "AssetPaths.h" "GameObject.h" "Timer.h" "Animation.h"  "GlobalConstants.h" "Resources.h" "Resources.cpp" "GameStates.h" "tmx.h" "tmx.cpp" "HealthBar.h" "GameObjectFactory.h" "GameObjectFactory.cpp"  "ProfilingStats.h" "collision detection/AABB.h" "collision detection/Point.h" "collision detection/QuadTree.cpp" "collision detection/QuadTree.h" "collision detection/CollisionWorld.cpp" "collision detection/CollisionWorld.h")
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET 2D-Shooter PROPERTY CXX_STANDARD 20)
