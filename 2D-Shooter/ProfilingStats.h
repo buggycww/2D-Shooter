@@ -6,12 +6,14 @@ namespace
 {
     struct FrameStats
     {
-        float fps = 0.f;
-        float frameMs = 0.f;
-        float updateMs = 0.f;
-        float drawMs = 0.f;
-        float worstFrameMs = 0.f;
+        // PUBLISHED VALUES (read these to draw the HUD) ============================
+        float fps = 0.f; 
+        float frameMs = 0.f; // avg full frame time  (== 1000/fps)
+        float updateMs = 0.f; // avg CPU time in update
+        float drawMs = 0.f; // avg CPU time submitting draws
+        float worstFrameMs = 0.f; // worst single frame in window
 
+        // ACCUMULATTORS FOR CURRENT WINDOW (seconds) ===============================
         float windowTime = 0.f;
         float updateTime = 0.f;
         float drawTime = 0.f;
@@ -29,12 +31,13 @@ namespace
             // update  displayed numbers a few times per second instead of every frame.
             if (windowTime >= 0.25f)
             {
-                const float inv = 1.f / windowTime;
+                const double invFrames = 1.0 / frames;
+                const double invTime = 1.0 / windowTime;
 
-                fps = frames * inv;
-                frameMs = windowTime * 1000.f * inv;
-                updateMs = updateTime * 1000.f * inv;
-                drawMs = drawTime * 1000.f * inv;
+                fps = frames * invTime;
+                frameMs = windowTime * 1000.f * invFrames;
+                updateMs = updateTime * 1000.f * invFrames;
+                drawMs = drawTime * 1000.f * invFrames;
                 worstFrameMs = windowWorst;
 
                 windowTime = updateTime = drawTime = windowWorst = 0.f;
