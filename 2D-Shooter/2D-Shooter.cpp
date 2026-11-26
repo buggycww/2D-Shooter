@@ -93,7 +93,16 @@ int main(int argc, char* argv[])
 	TrackPtr bgMusicTrack(MIX_CreateTrack(state.mixer));
 	MIX_SetTrackGain(bgMusicTrack.get(), 0.5f);
 	MIX_SetTrackAudio(bgMusicTrack.get(), res.audioBgMusic);
-	MIX_PlayTrack(bgMusicTrack.get(), 0);
+
+	// Create a properties object for looping
+	SDL_PropertiesID props = SDL_CreateProperties();
+	SDL_SetNumberProperty(props, MIX_PROP_PLAY_LOOPS_NUMBER, -1); // -1 = infinite
+
+	// Play the track with the looping properties
+	MIX_PlayTrack(bgMusicTrack.get(), props);
+
+	// The properties can be destroyed after the call, SDL copies the values internally
+	SDL_DestroyProperties(props);
 
 	HealthBar healthBar;
 
