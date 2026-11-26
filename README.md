@@ -4,7 +4,7 @@ A simple 2D shooter build using C++ and SDL3. This is a learning project I made 
 
 The collision system is adapted from my existing [quadtree-visualiser](https://github.com/buggycww/quadtree-visualiser), with slight modifications to accommodate this project's needs. Entries store a full AABB instead of only a point, and Point is repurposed as an identity handle, so a query result can be mapped back to the game object that owns it.
 
-## What the project covers
+## Project Overview
 
 - **Rendering** - Setting up a window, drawing sprites, and managing the render loop with SDL3.
 - **Assets** - Loading textures, spritesheets, and audio from the `data/` directory.
@@ -16,7 +16,7 @@ The collision system is adapted from my existing [quadtree-visualiser](https://g
 - **Animation** - Sprite animation state switching and frame management.
 - **Enemies and audio** - Basic enemy behavior and sound playback.
 
-## Built with
+## Language & Libraries
 
 - **C++**
 - **SDL3** - Windowing, rendering, input, and audio
@@ -34,7 +34,7 @@ Input is handled through SDL3, with bindings configured manually in the input co
 | Jump | Space |
 | Shoot | Left mouse button |
 
-## Building and running
+## Build
 
 1. Clone the repository:
 
