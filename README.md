@@ -10,7 +10,7 @@ https://github.com/user-attachments/assets/09ff9e4a-5d10-42d6-8777-fa7811b3310b
 
 - **Rendering** - Setting up a window, drawing sprites, and managing the render loop with SDL3.
 - **Assets** - Loading textures, spritesheets, and audio from the `data/` directory.
-- **Collision** - AABB collision with separate-axis handling, plus a custom quadtree for broad-phase collision detection, core logic imported from [quadtree-visualiser](https://github.com/buggycww/quadtree-visualiser).
+- **Collision** - AABB collision with separate-axis handling, plus a custom quadtree for broad-phase collision detection, core logic adapted from [quadtree-visualiser](https://github.com/buggycww/quadtree-visualiser).
 - **Update cycle** - A game loop that processes input, updates entities, and renders each frame.
 - **Camera** - Following the player and controlling what portion of the map is visible.
 - **Maps** - Parsed tilemaps loaded from data files (upgraded from initial hard-coded layouts).
