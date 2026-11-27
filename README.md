@@ -62,5 +62,5 @@ Input is handled through SDL3, with bindings configured manually in the input co
 ## Notes
 
 - This is a learning project, not a production game. The code favors clarity and experimentation, so it's not really polished.
-- The quadtree broad-phase collision system imported from [quadtree-visualiser](https://github.com/buggycww/quadtree-visualiser), and replaced the earlier naive collision checks (checking each object against every other object).
-- Tilemaps are parsed from data files rather than embedded in code.
+- The quadtree broad-phase collision system adapted from [quadtree-visualiser](https://github.com/buggycww/quadtree-visualiser), and replaced the earlier naive collision checks (checking each object against every other object).
+- Tilemaps are parsed from data files instead of hardcoded.
